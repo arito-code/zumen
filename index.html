@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>面積計算（PDF）</title>
+
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#121824; --panel2:#0f1520; --line:#243044;
+      --text:#e8eefc; --muted:#a7b3c9; --accent:#6ea8fe;
+      --ok:#5bd6a6; --warn:#ffcf5a; --danger:#ff6b6b;
+      /* Mobile bottom-sheet */
+      --sheet-peek: 148px; /* closed height (visible) */
+      --sheet-max: min(72dvh, 560px); /* opened max height */
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif; background:var(--bg); color:var(--text); }
+    .wrap{ max-width:1100px; margin:0 auto; padding:12px; }
+    .title{ font-size:16px; font-weight:700; margin:8px 0 10px; }
+    .grid{ display:grid; grid-template-columns:1fr; gap:10px; }
+    @media(min-width:900px){ .grid{ grid-template-columns:380px 1fr; } }
+    .card{ background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line); border-radius:16px; padding:12px; box-shadow:0 10px 25px rgba(0,0,0,.25); }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .row + .row{ margin-top:10px; }
+    label{ font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+    input[type="text"], input[type="number"]{ width:100%; padding:10px; background:#0d1422; color:var(--text); border:1px solid var(--line); border-radius:12px; outline:none; }
+    .field{ flex:1; min-width:160px; }
+    .btn{
+      appearance:none; border:1px solid var(--line); background:#0d1422; color:var(--text);
+      padding:10px 12px; border-radius:12px; cursor:pointer; font-weight:700;
+      transition:transform .05s ease, filter .15s ease, border-color .15s ease;
+      user-select:none; -webkit-tap-highlight-color:transparent;
+    }
+    .btn:active{ transform:translateY(1px) scale(.99); filter:brightness(1.08); }
+    .btn.primary{ border-color:rgba(110,168,254,.55); }
+    .btn.ok{ border-color:rgba(91,214,166,.55); }
+    .btn.warn{ border-color:rgba(255,207,90,.55); }
+    .btn.danger{ border-color:rgba(255,107,107,.55); }
+    .btn:disabled{ opacity:.45; cursor:not-allowed; filter: grayscale(.2); transform:none; }
+
+    .pill{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.03); font-size:12px; color:var(--muted); }
+    .pill strong{ color:var(--text); }
+    .hint{ font-size:12px; color:var(--muted); line-height:1.5; }
+    .status{ font-size:12px; color:var(--muted); padding:10px; border:1px dashed var(--line); border-radius:12px; background:rgba(255,255,255,.02); white-space:pre-wrap; }
+
+    /* ▼ スマホ向けにPDF表示を“縦に広く” */
+    .viewer{
+      position:relative;
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:16px;
+      overflow:hidden;
+      background:#0a0f18;
+      min-height:60vh; /* スマホで効く */
+    }
+    @media(min-width:900px){
+      .viewer{ min-height:720px; }
+    }
+
+    #pdfCanvas,#overlay{ display:block; width:100%; height:auto; }
+    #overlay{ position:absolute; inset:0; touch-action:none; }
+
+    .overlayLoading{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:9999; }
+    .overlayLoading.on{ display:flex; }
+    .spinner{ width:44px; height:44px; border-radius:50%; border:4px solid rgba(255,255,255,.15); border-top-color:rgba(110,168,254,.9); animation:spin 1s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+
+    /* ===== Mobile: PDF first, controls as bottom sheet ===== */
+    @media (max-width:899px){
+      .wrap{
+        padding-bottom: calc(var(--sheet-peek) + var(--safe-b) + 12px);
+      }
+
+      /* Keep PDF large */
+      .viewer{
+        min-height: calc(100dvh - var(--sheet-peek) - 120px);
+      }
+
+      /* Bottom sheet */
+      .sheetRoot{ height:0; }
+      .sheetToggle{
+        position:absolute;
+        opacity:0;
+        pointer-events:none;
+      }
+      .sheetPanel{
+        position:fixed;
+        left:12px;
+        right:12px;
+        bottom:12px;
+        max-width:1100px;
+        margin:0 auto;
+
+        padding:0;
+        border-radius:18px;
+        overflow:hidden;
+        z-index:50;
+
+        max-height: calc(var(--sheet-max) + var(--safe-b));
+        transform: translateY(calc(100% - var(--sheet-peek)));
+        transition: transform .18s ease;
+      }
+      .sheetToggle:checked + .sheetPanel{
+        transform: translateY(0);
+      }
+      .sheetHandle{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        padding:12px;
+        border-bottom:1px solid var(--line);
+        background: rgba(13,20,34,.92);
+        backdrop-filter: blur(8px);
+        cursor:pointer;
+        user-select:none;
+      }
+      .sheetGrab{
+        width:36px;
+        height:4px;
+        border-radius:999px;
+        background: rgba(255,255,255,.25);
+        margin-right:auto;
+      }
+      .sheetTitle{ font-weight:800; }
+      .sheetHint{ font-size:12px; color: var(--muted); margin-left:auto; }
+      .sheetBody{
+        padding:12px;
+        padding-bottom: calc(12px + var(--safe-b));
+        max-height: calc(var(--sheet-max) - 52px);
+        overflow:auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Touch targets */
+      .btn{ min-height:44px; padding:12px 14px; }
+      input[type="text"], input[type="number"]{ padding:12px; }
+    }
+
+    /* Desktop: show controls normally (no sheet affordance) */
+    @media (min-width:900px){
+      .sheetToggle, .sheetHandle{ display:none; }
+      .sheetPanel{ padding:12px; }
+      .sheetBody{ padding:0; max-height:none; overflow:visible; }
+    }
+  </style>
+
+  <script>
+    // =========================
+    // GAS API 設定
+    // =========================
+    // CORS回避のため、同一オリジンのプロキシ（gas_proxy.php）経由でGASへ送る
+    // ※ public_html に gas_proxy.php を配置してください
+    const GAS_API_URL = './gas_proxy.php';
+    // オプション: APIキー（Code.gsでAPI_KEYを設定した場合のみ必要）
+    const API_KEY = '';
+
+    /**
+     * GAS API呼び出し（google.script.runの代替）
+     */
+    async function callGasApi(action, data, options = {}) {
+      const maxRetries = options.maxRetries || 3;
+      const retryDelay = options.retryDelay || 1000;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const requestBody = {
+            action: action,
+            ...data
+          };
+          
+          // APIキーが設定されている場合は追加
+          if (API_KEY) {
+            requestBody.apiKey = API_KEY;
+          }
+          
+          const response = await fetch(GAS_API_URL, {
+            method: 'POST',
+            headers: {
+              // CORSプリフライト回避（GAS WebアプリはOPTIONSのCORSが通らないことがある）
+              'Content-Type': 'text/plain',
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          
+          if (!result.success) {
+            throw new Error(result.error || 'API request failed');
+          }
+          
+          return result.data;
+          
+        } catch (error) {
+          console.error(`API call failed (attempt ${attempt}/${maxRetries}):`, error);
+          
+          if (attempt === maxRetries) {
+            throw error;
+          }
+          
+          // リトライ前に待機
+          await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+        }
+      }
+    }
+
+    // =========================
+    // pdf.js ローダー
+    // =========================
+    function loadScript(url){
+      return new Promise((resolve, reject)=>{
+        const s = document.createElement("script");
+        s.src = url;
+        s.onload = resolve;
+        s.onerror = ()=> reject(new Error("load failed: " + url));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function ensurePdfJsLoaded(){
+      if (window.pdfjsLib) return true;
+
+      const urls = [
+        // まずローカル（最速・最も確実）
+        "./pdfjs.min.js",
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.js",
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.js",
+        "https://unpkg.com/pdfjs-dist@4.6.82/build/pdf.min.js",
+      ];
+
+      const errors = [];
+      for(const url of urls){
+        try{
+          await loadScript(url);
+          if (window.pdfjsLib) {
+            if (window.pdfjsLib.GlobalWorkerOptions) {
+              // pdf.js 5.x は worker が必要
+              if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdf.worker.js";
+              }
+            }
+            console.log("pdf.js loaded successfully from:", url);
+            return true;
+          }
+        }catch(e){
+          const errorMsg = e.message || String(e);
+          errors.push(`${url}: ${errorMsg}`);
+          console.warn("Failed to load pdf.js from:", url, errorMsg);
+        }
+      }
+      console.error("All pdf.js loading attempts failed:", errors);
+      return false;
+    }
+  </script>
+</head>
+
+<body>
+  <div class="overlayLoading" id="loading"><div class="spinner"></div></div>
+
+  <div class="wrap">
+    <div class="title">面積計算（PDF）｜スマホで囲って㎡→スプシ保存（iPhone Safari最適化）</div>
+
+    <div class="grid">
+      <div class="sheetRoot">
+        <input id="sheetToggle" class="sheetToggle" type="checkbox" />
+
+        <div class="card sheetPanel">
+          <label class="sheetHandle" for="sheetToggle">
+            <span class="sheetGrab"></span>
+            <span class="sheetTitle">操作パネル</span>
+            <span class="sheetHint">タップで開閉</span>
+          </label>
+
+          <div class="sheetBody">
+            <div class="row">
+              <div class="field">
+                <label>案件名（任意）</label>
+                <input id="projectName" type="text" placeholder="例：A様邸 1F" />
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="field">
+                <label>PDF（スマホからアップロード）</label>
+                <input id="pdfFile" type="file" accept="application/pdf" />
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="field">
+                <label>ページ</label>
+                <input id="pageNo" type="number" min="1" step="1" value="1" />
+              </div>
+              <button class="btn primary" id="btnRender" disabled>表示</button>
+            </div>
+
+            <div class="row">
+              <span class="pill">モード：<strong id="modeLabel">スケール</strong></span>
+              <button class="btn primary" id="btnModeScale">スケール</button>
+              <button class="btn primary" id="btnModePoly">囲い</button>
+            </div>
+
+            <div class="row">
+              <div class="field">
+                <label>スケール：実際の長さ（mm）</label>
+                <input id="actualMm" type="number" min="1" step="1" placeholder="例：5000" />
+              </div>
+              <button class="btn ok" id="btnApplyScale" disabled>スケール確定</button>
+            </div>
+
+            <div class="row">
+              <button class="btn warn" id="btnUndo">1つ戻す</button>
+              <button class="btn danger" id="btnClear">リセット</button>
+            </div>
+
+            <div class="row">
+              <button class="btn ok" id="btnSave" disabled>スプシへ保存</button>
+            </div>
+
+            <div class="row">
+              <div class="hint">
+                <b>手順</b><br/>
+                1) PDFを選ぶ → 表示<br/>
+                2) <b>スケール</b>：寸法線の両端を2回タップ → mm入力 → 確定<br/>
+                3) <b>囲い</b>：範囲をタップで囲う（3点以上）<br/>
+                4) 面積(㎡) → 保存
+              </div>
+            </div>
+
+            <div class="row"><div class="status" id="status">PDF未選択</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card viewerCard">
+        <div class="viewer" id="viewer">
+          <canvas id="pdfCanvas"></canvas>
+          <canvas id="overlay"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ===== iPhone Safari "白画面"対策の核 =====
+  // - workerはdisableWorkerで封印（iOS + GASで止まりやすい）
+  // - 総ピクセル上限でメモリ落ちを回避
+
+  const MAX_CANVAS_PIXELS = 7_000_000;
+  const DPR_CAP = 2;
+
+  const state = {
+    pdfDoc: null,
+    pageCount: 0,
+    renderedPage: 1,
+
+    pdfMeta: null,
+
+    mode: "scale",
+
+    scalePts: [],
+    actualMm: null,
+    mmPerPx: null,
+    pixelDist: null,
+
+    polyPts: [],
+  };
+
+  const el = {
+    loading: document.getElementById("loading"),
+    status: document.getElementById("status"),
+    pdfFile: document.getElementById("pdfFile"),
+    pageNo: document.getElementById("pageNo"),
+    btnRender: document.getElementById("btnRender"),
+    btnModeScale: document.getElementById("btnModeScale"),
+    btnModePoly: document.getElementById("btnModePoly"),
+    modeLabel: document.getElementById("modeLabel"),
+    actualMm: document.getElementById("actualMm"),
+    btnApplyScale: document.getElementById("btnApplyScale"),
+    btnUndo: document.getElementById("btnUndo"),
+    btnClear: document.getElementById("btnClear"),
+    btnSave: document.getElementById("btnSave"),
+    projectName: document.getElementById("projectName"),
+    pdfCanvas: document.getElementById("pdfCanvas"),
+    overlay: document.getElementById("overlay"),
+    viewer: document.getElementById("viewer"),
+  };
+
+  const ctxPdf = el.pdfCanvas.getContext("2d");
+  const ctxOv  = el.overlay.getContext("2d");
+
+  function setLoading(on){ el.loading.classList.toggle("on", !!on); }
+  function setStatus(msg){ el.status.textContent = msg; }
+
+  function setUiEnabled(ready){
+    el.btnRender.disabled = !ready;
+    el.btnApplyScale.disabled = !ready;
+    el.btnSave.disabled = !ready;
+  }
+
+  function setMode(mode){
+    state.mode = mode;
+    el.modeLabel.textContent = (mode === "scale") ? "スケール" : "囲い";
+    drawOverlay();
+    setStatus(buildStatusText());
+  }
+
+  function dist(a,b){
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+
+  function shoelaceArea(points){
+    let sum = 0;
+    for(let i=0;i<points.length;i++){
+      const j = (i+1) % points.length;
+      sum += points[i].x * points[j].y - points[j].x * points[i].y;
+    }
+    return Math.abs(sum) / 2;
+  }
+
+  function computeAreaM2(){
+    if(!state.mmPerPx) return null;
+    if(state.polyPts.length < 3) return null;
+    const areaPx2 = shoelaceArea(state.polyPts);
+    const areaMm2 = areaPx2 * (state.mmPerPx ** 2);
+    return areaMm2 / 1_000_000;
+  }
+
+  function buildStatusText(){
+    const lines = [];
+    if(state.pdfMeta){
+      lines.push(`PDF：${state.pdfMeta.name}`);
+      lines.push(`Drive：${state.pdfMeta.url}`);
+    } else {
+      lines.push("PDF：未アップロード（表示はOK）");
+    }
+    lines.push(`ページ：${state.renderedPage}/${state.pageCount || "?"}`);
+    lines.push(`モード：${state.mode === "scale" ? "スケール" : "囲い"}`);
+
+    if(state.pixelDist != null) lines.push(`スケール：pixel距離 = ${state.pixelDist.toFixed(2)}px`);
+    if(state.mmPerPx != null) lines.push(`スケール：1px = ${state.mmPerPx.toFixed(6)}mm`);
+    else lines.push("スケール：未確定（寸法線2点→mm入力→確定）");
+
+    const area = computeAreaM2();
+    if(area != null) lines.push(`面積：${area.toFixed(3)} ㎡`);
+    else lines.push("面積：未確定（囲い3点以上＋スケール確定）");
+
+    return lines.join("\n");
+  }
+
+  function getCanvasPointFromPointer(e){
+    const rect = el.overlay.getBoundingClientRect();
+    const xCss = e.clientX - rect.left;
+    const yCss = e.clientY - rect.top;
+    const x = xCss * (el.overlay.width / rect.width);
+    const y = yCss * (el.overlay.height / rect.height);
+    return {x, y};
+  }
+
+  async function loadPdfFromBytes(arrayBuffer){
+    setLoading(true);
+    try{
+      // ★ ここが大事：pdf.js が無ければロードする（CDN→CDN→GAS保険）
+      if(!window.pdfjsLib){
+        const ok = await ensurePdfJsLoaded();
+        if(!ok) throw new Error("pdf.js が読み込めません（CDNブロック or 通信制限の可能性）");
+      }
+
+      // ★ GlobalWorkerOptions.workerSrcを設定（disableWorker使用時でも必要）
+      if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        // pdf.js 5.x は worker が必要
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdf.worker.js";
+      }
+
+      state.pdfDoc = await pdfjsLib.getDocument({
+        data: arrayBuffer,
+      }).promise;
+
+      state.pageCount = state.pdfDoc.numPages;
+      setUiEnabled(true);
+
+      const page = Math.min(Math.max(parseInt(el.pageNo.value || "1",10),1), state.pageCount);
+      el.pageNo.value = String(page);
+
+      setStatus(`PDF読み込み完了：全${state.pageCount}ページ\n（iPhone対策：自動で画質を落としてでも表示します）`);
+      await renderPage(page);
+    } catch(err){
+      console.error(err);
+      const msg = err && err.message ? err.message : String(err);
+      setStatus("PDF読み込みエラー:\n" + msg);
+      alert("PDF読み込みエラー:\n" + msg);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function renderPage(pageNo){
+    if(!state.pdfDoc) return;
+    setLoading(true);
+    try{
+      const page = await state.pdfDoc.getPage(pageNo);
+
+      const viewerWidthCss = el.viewer.clientWidth;
+      const base = page.getViewport({scale:1});
+      let cssScale = viewerWidthCss / base.width;
+
+      // CSS上の見た目
+      const viewportCss = page.getViewport({scale: cssScale});
+      const cssW = Math.floor(viewportCss.width);
+      const cssH = Math.floor(viewportCss.height);
+
+      // DPR（上限付き）
+      let dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+
+      // まず理想ピクセルで計算
+      let targetW = Math.floor(cssW * dpr);
+      let targetH = Math.floor(cssH * dpr);
+
+      // ★ メモリ落ち（白画面）を防ぐ：総ピクセル上限で縮小
+      const pixels = targetW * targetH;
+      if(pixels > MAX_CANVAS_PIXELS){
+        const ratio = Math.sqrt(MAX_CANVAS_PIXELS / pixels);
+        dpr = Math.max(1, dpr * ratio);
+        targetW = Math.floor(cssW * dpr);
+        targetH = Math.floor(cssH * dpr);
+      }
+
+      const viewport = page.getViewport({scale: cssScale * dpr});
+
+      el.pdfCanvas.width = targetW;
+      el.pdfCanvas.height = targetH;
+      el.overlay.width = targetW;
+      el.overlay.height = targetH;
+
+      // CSSサイズは固定（ズレ防止）
+      el.pdfCanvas.style.width = cssW + "px";
+      el.pdfCanvas.style.height = cssH + "px";
+      el.overlay.style.width = cssW + "px";
+      el.overlay.style.height = cssH + "px";
+
+      ctxPdf.setTransform(1,0,0,1,0,0);
+      ctxPdf.clearRect(0,0,targetW,targetH);
+
+      await page.render({canvasContext: ctxPdf, viewport}).promise;
+
+      state.renderedPage = pageNo;
+      drawOverlay();
+      setStatus(buildStatusText());
+    } catch(err){
+      console.error(err);
+      const msg = err && err.message ? err.message : String(err);
+      setStatus("描画エラー:\n" + msg);
+      alert("描画エラー:\n" + msg);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function drawOverlay(){
+    ctxOv.setTransform(1,0,0,1,0,0);
+    ctxOv.clearRect(0,0,el.overlay.width, el.overlay.height);
+
+    if(state.scalePts.length){
+      drawPoints(state.scalePts, "scale");
+      if(state.scalePts.length === 2) drawLine(state.scalePts[0], state.scalePts[1], "scale");
+    }
+
+    if(state.polyPts.length){
+      drawPoints(state.polyPts, "poly");
+      drawPolyline(state.polyPts);
+      if(state.polyPts.length >= 3) drawLine(state.polyPts[state.polyPts.length-1], state.polyPts[0], "hint");
+    }
+  }
+
+  function drawPoints(pts, kind){
+    for(const p of pts){
+      ctxOv.beginPath();
+      ctxOv.arc(p.x, p.y, 6, 0, Math.PI*2);
+      ctxOv.closePath();
+      ctxOv.lineWidth = 2;
+      ctxOv.strokeStyle = (kind==="scale") ? "rgba(110,168,254,.95)" : "rgba(91,214,166,.95)";
+      ctxOv.fillStyle = "rgba(255,255,255,0)";
+      ctxOv.stroke();
+    }
+  }
+
+  function drawLine(a,b,kind){
+    ctxOv.beginPath();
+    ctxOv.moveTo(a.x, a.y);
+    ctxOv.lineTo(b.x, b.y);
+    ctxOv.lineWidth = 3;
+    if(kind==="scale") ctxOv.strokeStyle = "rgba(110,168,254,.9)";
+    else if(kind==="hint") ctxOv.strokeStyle = "rgba(255,207,90,.55)";
+    else ctxOv.strokeStyle = "rgba(91,214,166,.9)";
+    ctxOv.stroke();
+  }
+
+  function drawPolyline(pts){
+    if(pts.length < 2) return;
+    ctxOv.beginPath();
+    ctxOv.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctxOv.lineTo(pts[i].x, pts[i].y);
+    ctxOv.lineWidth = 3;
+    ctxOv.strokeStyle = "rgba(91,214,166,.9)";
+    ctxOv.stroke();
+  }
+
+  function applyScale(){
+    const mm = parseFloat(el.actualMm.value || "");
+    if(!mm || mm <= 0) return alert("実際の長さ（mm）を入れてください（例：5000）");
+    if(state.scalePts.length !== 2) return alert("スケールモードで、寸法線の両端を2回タップしてください");
+
+    const px = dist(state.scalePts[0], state.scalePts[1]);
+    if(px <= 0) return alert("スケール点が同じです。もう一度選んでください");
+
+    state.actualMm = mm;
+    state.pixelDist = px;
+    state.mmPerPx = mm / px;
+
+    setStatus(buildStatusText());
+  }
+
+  function undo(){
+    if(state.mode === "scale"){
+      state.scalePts.pop();
+      state.actualMm = null;
+      state.mmPerPx = null;
+      state.pixelDist = null;
+    } else {
+      state.polyPts.pop();
+    }
+    drawOverlay();
+    setStatus(buildStatusText());
+  }
+
+  function clearAll(){
+    state.scalePts = [];
+    state.polyPts = [];
+    state.actualMm = null;
+    state.mmPerPx = null;
+    state.pixelDist = null;
+    drawOverlay();
+    setStatus(buildStatusText());
+  }
+
+  function fileToDataUrl(file){
+    return new Promise((resolve,reject)=>{
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  async function handlePdfFile(file){
+    if(!file) return;
+
+    // ★ ファイルサイズチェック（10MB制限）
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_FILE_SIZE) {
+      return alert(`ファイルサイズが大きすぎます（最大${MAX_FILE_SIZE / 1024 / 1024}MB）`);
+    }
+
+    // ★ iPhone対策：typeが空でも .pdf ならOK
+    const name = (file.name || "").toLowerCase();
+    const looksPdf = name.endsWith(".pdf");
+    const isPdf = (file.type === "application/pdf") || (file.type === "" && looksPdf);
+
+    if(!isPdf){
+      return alert("PDFを選んでください（拡張子が .pdf のファイル）");
+    }
+
+    // 表示を最優先：まずはローカルで描画
+    setLoading(true);
+    try{
+      const bytes = await file.arrayBuffer();
+      await loadPdfFromBytes(bytes);
+      setStatus(buildStatusText() + "\n\n（Drive保存中…）");
+    } finally {
+      setLoading(false);
+    }
+
+    // Driveアップロードは後で（表示の邪魔をしない）
+    try{
+      const dataUrl = await fileToDataUrl(file);
+      const meta = await callGasApi('uploadPdf', {
+        dataUrl: dataUrl,
+        filename: file.name,
+        mimeType: file.type || "application/pdf"
+      });
+      state.pdfMeta = meta;
+      setStatus(buildStatusText());
+    } catch(err){
+      console.error(err);
+      const msg = err && err.message ? err.message : String(err);
+      setStatus(buildStatusText() + "\n\nDrive保存に失敗:\n" + msg);
+    }
+  }
+
+  async function saveToSheet(){
+    const area = computeAreaM2();
+    if(!state.mmPerPx) return alert("スケールが未確定です（寸法線2点→mm入力→確定）");
+    if(area == null) return alert("面積が未確定です（囲い3点以上）");
+
+    const payload = {
+      projectName: el.projectName.value || "",
+      pdfName: state.pdfMeta?.name || "(Drive未保存)",
+      pdfUrl: state.pdfMeta?.url || "",
+      page: state.renderedPage,
+      actualMm: state.actualMm,
+      pixelDist: state.pixelDist,
+      mmPerPx: state.mmPerPx,
+      areaM2: area,
+      pointsJson: JSON.stringify({ scalePts: state.scalePts, polyPts: state.polyPts })
+    };
+
+    setLoading(true);
+    try{
+      await callGasApi('saveResult', { payload: payload });
+      alert(`保存しました！\n面積：${area.toFixed(3)} ㎡`);
+    } catch(err){
+      console.error(err);
+      alert("保存でエラー：" + ((err && err.message) ? err.message : String(err)));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Events
+  el.pdfFile.addEventListener("change", e => handlePdfFile(e.target.files[0]));
+  el.btnRender.addEventListener("click", async ()=>{
+    if(!state.pdfDoc) return alert("先にPDFを選んでください");
+    const p = parseInt(el.pageNo.value || "1",10);
+    const safe = Math.min(Math.max(p,1), state.pageCount);
+    el.pageNo.value = String(safe);
+    await renderPage(safe);
+  });
+
+  el.btnModeScale.addEventListener("click", ()=> setMode("scale"));
+  el.btnModePoly.addEventListener("click", ()=> setMode("poly"));
+  el.btnApplyScale.addEventListener("click", applyScale);
+  el.btnUndo.addEventListener("click", undo);
+  el.btnClear.addEventListener("click", clearAll);
+  el.btnSave.addEventListener("click", saveToSheet);
+
+  // iPhoneで二重発火しないように pointerdown だけ
+  el.overlay.addEventListener("pointerdown", (e)=>{
+    e.preventDefault();
+    if(!state.pdfDoc) return;
+    const p = getCanvasPointFromPointer(e);
+
+    if(state.mode === "scale"){
+      if(state.scalePts.length >= 2) state.scalePts = [];
+      state.scalePts.push(p);
+      if(state.scalePts.length === 2) state.pixelDist = dist(state.scalePts[0], state.scalePts[1]);
+    } else {
+      state.polyPts.push(p);
+    }
+
+    drawOverlay();
+    setStatus(buildStatusText());
+  }, {passive:false});
+
+  // 回転/サイズ変更時
+  let resizeTimer = null;
+  window.addEventListener("resize", ()=>{
+    if(!state.pdfDoc) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(()=> renderPage(state.renderedPage), 250);
+  });
+
+  setStatus("PDF未選択");
+  setUiEnabled(false);
+</script>
+ 
+</body>
+</html>
