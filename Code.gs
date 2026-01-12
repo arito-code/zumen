@@ -10,9 +10,20 @@ function getConfig() {
   return {
     SPREADSHEET_ID: props.getProperty('SPREADSHEET_ID') || "1dygMoihb3Xe2ps_2fMauZ2RjdlIl1DLOoQ671fzxm2Y",
     SHEET_NAME: props.getProperty('SHEET_NAME') || "面積計算ログ",
+    ESTIMATE_SHEET_NAME: props.getProperty('ESTIMATE_SHEET_NAME') || "見積ログ",
     DRIVE_FOLDER_ID: props.getProperty('DRIVE_FOLDER_ID') || "1l_NBxyuxFQVwSaAI5ZTR_Ad8Esn5HUhI",
     API_KEY: props.getProperty('API_KEY') || "", // セキュリティ対策（オプション）
+    ADMIN_EMAIL: props.getProperty('ADMIN_EMAIL') || "info@g-knowthyself.com", // 見積控え送付先（任意）
   };
+}
+
+/**
+ * 疎通確認（ブラウザで /exec を開いた時に doGet が無いとエラーになるため）
+ */
+function doGet() {
+  return ContentService
+    .createTextOutput(JSON.stringify({ success: true, message: "GAS alive" }))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -92,6 +103,14 @@ function doPost(e) {
         data: result
       });
     }
+
+    if (action === 'saveEstimate') {
+      const result = saveEstimate(requestData.payload);
+      return sendResponse({
+        success: true,
+        data: result
+      });
+    }
     
     return sendResponse({
       success: false,
@@ -105,6 +124,103 @@ function doPost(e) {
       error: error.message || String(error)
     }, 500);
   }
+}
+
+function saveEstimate(payload) {
+  if (!payload) {
+    throw new Error("保存データが空です。payloadが必要です。");
+  }
+
+  const CONFIG = getConfig();
+  if (!CONFIG.SPREADSHEET_ID) {
+    throw new Error("スプレッドシートIDが設定されていません。スクリプトプロパティにSPREADSHEET_IDを設定してください。");
+  }
+
+  const customerEmail = (payload.customerEmail || "").trim();
+  const sendEmail = !!payload.sendEmail;
+  if (sendEmail && !customerEmail) {
+    throw new Error("見積送付先メールが空です。");
+  }
+
+  let ss;
+  try {
+    ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  } catch (e) {
+    const errorMsg = e.message || String(e);
+    throw new Error(`スプレッドシートにアクセスできません（ID: ${CONFIG.SPREADSHEET_ID}）。エラー: ${errorMsg}`);
+  }
+
+  let sheet;
+  try {
+    sheet = getOrCreateSheet_(ss, CONFIG.ESTIMATE_SHEET_NAME);
+  } catch (e) {
+    throw new Error(`シート「${CONFIG.ESTIMATE_SHEET_NAME}」の作成/取得に失敗しました: ${e.message || String(e)}`);
+  }
+
+  try {
+    ensureHeaderEstimate_(sheet);
+  } catch (e) {
+    throw new Error(`シートヘッダー（見積）の設定に失敗しました: ${e.message || String(e)}`);
+  }
+
+  const now = new Date();
+  const ts = Utilities.formatDate(now, "Asia/Tokyo", "yyyy-MM-dd HH:mm:ss");
+
+  const unitPricesJson = payload.unitPrices ? JSON.stringify(payload.unitPrices) : "";
+  const qtySupport = payload.qty?.supportFoot ?? payload.autoQty?.supportFoot ?? payload.supportFoot ?? "";
+  const qtyPlywood = payload.qty?.plywood ?? payload.autoQty?.plywood ?? payload.plywood ?? "";
+  const qtyVeneer12 = payload.qty?.veneer12 ?? payload.autoQty?.veneer12 ?? payload.veneer12 ?? "";
+
+  const row = [
+    ts,
+    payload.projectName || "",
+    customerEmail,
+    payload.pdfName || "",
+    payload.pdfUrl || "",
+    payload.page ?? "",
+    payload.areaM2 ?? "",
+    payload.wallM ?? "",
+    qtySupport,
+    qtyPlywood,
+    qtyVeneer12,
+    unitPricesJson,
+    payload.total ?? "",
+    payload.estimateText || "",
+    sendEmail ? "1" : "0",
+    "", // emailResult
+  ];
+
+  try {
+    sheet.appendRow(row);
+  } catch (e) {
+    throw new Error(`スプレッドシートへの保存に失敗しました: ${e.message || String(e)}`);
+  }
+
+  let emailResult = "skipped";
+  if (sendEmail) {
+    const subject = `【見積】${payload.projectName ? payload.projectName : "乾式二重床"}（自動作成）`;
+    const body = payload.estimateText || "見積内容が空です。";
+    const bcc = (CONFIG.ADMIN_EMAIL || "").trim();
+    try {
+      const options = {};
+      if (bcc) options.bcc = bcc;
+      GmailApp.sendEmail(customerEmail, subject, body, options);
+      emailResult = bcc ? "sent_with_bcc" : "sent_no_admin_email";
+    } catch (e) {
+      emailResult = "send_failed: " + (e.message || String(e));
+      console.error("メール送信に失敗:", e);
+    }
+  }
+
+  // 最終行の emailResult を更新（簡易）
+  try {
+    const lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow, 16).setValue(emailResult);
+  } catch (e) {
+    console.error("emailResultの更新に失敗:", e);
+  }
+
+  return { ok: true, emailResult };
 }
 
 function uploadPdf(dataUrl, filename, mimeType) {
@@ -301,4 +417,33 @@ function ensureHeader_(sheet) {
       throw new Error(`シートヘッダーの書き込みに失敗しました: ${errorMsg}`);
     }
   }
+}
+
+function ensureHeaderEstimate_(sheet) {
+  const header = [
+    "timestamp",
+    "projectName",
+    "customerEmail",
+    "pdfName",
+    "pdfUrl",
+    "page",
+    "area_m2",
+    "wall_m",
+    "qty_supportFoot",
+    "qty_plywood",
+    "qty_veneer12",
+    "unitPrices_json",
+    "total_yen",
+    "estimateText",
+    "sendEmail",
+    "emailResult",
+  ];
+
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+    sheet.setFrozenRows(1);
+    return;
+  }
+
+  // 既存ヘッダーが違う場合でも、最小限で壊さない（追記はしない）
 }

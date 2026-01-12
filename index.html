@@ -3,146 +3,645 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>面積計算（PDF）</title>
+  <title>乾式二重床 積算・拾い出しツール</title>
 
   <style>
     :root{
-      --bg:#0b0f14; --panel:#121824; --panel2:#0f1520; --line:#243044;
-      --text:#e8eefc; --muted:#a7b3c9; --accent:#6ea8fe;
-      --ok:#5bd6a6; --warn:#ffcf5a; --danger:#ff6b6b;
-      /* Mobile bottom-sheet */
-      --sheet-peek: 148px; /* closed height (visible) */
-      --sheet-max: min(72dvh, 560px); /* opened max height */
+      --bg:#f8fbff;
+      --panel:#ffffff;
+      --line:#dfe7f2;
+      --text:#172033;
+      --muted:#52607a;
+
+      --sky:#cfe8ff;
+      --mint:#bfeee2;
+      --peach:#ffd9c9;
+      --lav:#e7dbff;
+      --lemon:#fff1b8;
+
+      --shadow:0 10px 24px rgba(18, 32, 51, .10);
+      --radius: 18px;
+      --bar-h: 98px;
       --safe-b: env(safe-area-inset-bottom, 0px);
     }
     *{ box-sizing:border-box; }
-    body{ margin:0; font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif; background:var(--bg); color:var(--text); }
-    .wrap{ max-width:1100px; margin:0 auto; padding:12px; }
-    .title{ font-size:16px; font-weight:700; margin:8px 0 10px; }
-    .grid{ display:grid; grid-template-columns:1fr; gap:10px; }
-    @media(min-width:900px){ .grid{ grid-template-columns:380px 1fr; } }
-    .card{ background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line); border-radius:16px; padding:12px; box-shadow:0 10px 25px rgba(0,0,0,.25); }
-    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .row + .row{ margin-top:10px; }
-    label{ font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
-    input[type="text"], input[type="number"]{ width:100%; padding:10px; background:#0d1422; color:var(--text); border:1px solid var(--line); border-radius:12px; outline:none; }
-    .field{ flex:1; min-width:160px; }
-    .btn{
-      appearance:none; border:1px solid var(--line); background:#0d1422; color:var(--text);
-      padding:10px 12px; border-radius:12px; cursor:pointer; font-weight:700;
-      transition:transform .05s ease, filter .15s ease, border-color .15s ease;
-      user-select:none; -webkit-tap-highlight-color:transparent;
+    body{
+      margin:0;
+      font-family: system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;
+      background:
+        radial-gradient(900px 520px at 10% 0%, rgba(207,232,255,.75), transparent 60%),
+        radial-gradient(900px 520px at 90% 0%, rgba(255,217,201,.65), transparent 60%),
+        var(--bg);
+      color:var(--text);
     }
-    .btn:active{ transform:translateY(1px) scale(.99); filter:brightness(1.08); }
-    .btn.primary{ border-color:rgba(110,168,254,.55); }
-    .btn.ok{ border-color:rgba(91,214,166,.55); }
-    .btn.warn{ border-color:rgba(255,207,90,.55); }
-    .btn.danger{ border-color:rgba(255,107,107,.55); }
-    .btn:disabled{ opacity:.45; cursor:not-allowed; filter: grayscale(.2); transform:none; }
 
-    .pill{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.03); font-size:12px; color:var(--muted); }
-    .pill strong{ color:var(--text); }
-    .hint{ font-size:12px; color:var(--muted); line-height:1.5; }
-    .status{ font-size:12px; color:var(--muted); padding:10px; border:1px dashed var(--line); border-radius:12px; background:rgba(255,255,255,.02); white-space:pre-wrap; }
+    /* Top progress */
+    .topSticky{
+      position:sticky;
+      top:0;
+      z-index:30;
+      background:rgba(255,255,255,.92);
+      backdrop-filter: blur(10px);
+      border-bottom:2px solid var(--line);
+    }
+    .topInner{ max-width:1200px; margin:0 auto; padding:10px 14px; }
+    .titleRow{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .title{ font-size:18px; font-weight:900; letter-spacing:.01em; }
+    .sub{ color:var(--muted); font-size:13px; margin-left:auto; }
+    /* PDF controls in top sticky */
+    #pdfTopSlot{ margin-top:10px; }
+    .pdfTopBar{
+      border:2px solid var(--line);
+      border-radius:16px;
+      background:rgba(255,255,255,.92);
+      padding:10px 12px;
+      box-shadow:0 4px 0 rgba(0,0,0,.03);
+    }
+    .pdfTopBar .row{ align-items:end; }
+    .pageStepper{ display:flex; gap:8px; align-items:center; }
+    .stepperBtn{
+      border:2px solid var(--line);
+      background:#fff;
+      border-radius:14px;
+      min-height:54px;
+      padding:0 14px;
+      font-weight:900;
+      font-size:18px;
+      cursor:pointer;
+      box-shadow:0 4px 0 rgba(0,0,0,.04);
+      user-select:none;
+    }
+    .stepperBtn:active{ transform:translateY(1px); box-shadow:0 3px 0 rgba(0,0,0,.04); }
+    @media(max-width:1019px){
+      .pdfTopBar label{ display:none; }
+      .pdfTopBar input[type="number"]{ font-size:16px; padding:12px 10px; }
+    }
+    .progress{
+      display:grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap:8px;
+      margin-top:10px;
+    }
+    .step{
+      border:2px solid var(--line);
+      border-radius:14px;
+      background:#fff;
+      padding:10px 8px;
+      text-align:center;
+      font-weight:900;
+      font-size:12px;
+      color:var(--muted);
+      box-shadow:0 3px 0 rgba(0,0,0,.04);
+    }
+    .step strong{ display:block; color:var(--text); font-size:14px; }
+    .step.on{
+      background:rgba(207,232,255,.85);
+      border-color:rgba(110,168,254,.6);
+      color:var(--text);
+    }
+    .step.done{
+      background:rgba(191,238,226,.75);
+      border-color:rgba(91,214,166,.55);
+      color:var(--text);
+    }
+    @media(max-width:820px){
+      .progress{ grid-template-columns: 1fr 1fr 1fr; }
+      .sub{ width:100%; margin-left:0; }
+    }
 
-    /* ▼ スマホ向けにPDF表示を“縦に広く” */
+    /* Mobile: keep top sticky compact (<= ~50% of screen by design) */
+    @media(max-width:1019px){
+      .topInner{ padding:8px 10px; }
+      .title{ font-size:16px; }
+      .sub{ display:none; }
+
+      /* progress becomes horizontal scroll (1 row) */
+      .progress{
+        display:flex;
+        gap:8px;
+        overflow-x:auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom:2px;
+      }
+      .step{
+        min-width:120px;
+        flex:0 0 auto;
+      }
+
+      /* collapsible PDF controls */
+      #pdfTopSlot{ margin-top:6px; }
+      .pdfDetails{
+        border:2px solid var(--line);
+        border-radius:16px;
+        background:rgba(255,255,255,.92);
+        box-shadow:0 4px 0 rgba(0,0,0,.03);
+        overflow:hidden;
+      }
+      .pdfDetails summary{
+        list-style:none;
+        cursor:pointer;
+        user-select:none;
+        padding:6px 10px;
+        font-weight:900;
+        color:var(--text);
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+      }
+      .pdfDetails summary::-webkit-details-marker{ display:none; }
+      .pdfDetails .summaryHint{
+        color:var(--muted);
+        font-weight:800;
+        font-size:13px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        flex:1;
+        text-align:right;
+      }
+      .pdfDetailsBody{
+        border-top:2px solid var(--line);
+        padding:6px 8px;
+      }
+      .pdfTopBar{ border:0; box-shadow:none; padding:0; background:transparent; }
+
+      /* compact PDF controls row */
+      .pdfTopBar .row{ gap:8px; }
+      #pdfControls .field{ min-width:120px; }
+      #pdfControls input[type="number"]{ padding:10px 10px; }
+      #pdfControls input[type="file"]{ padding:10px 10px; font-size:14px; }
+      #pdfControls .btn{ min-height:44px; padding:10px 12px; font-size:16px; }
+      .stepperBtn{ min-height:44px; padding:0 10px; font-size:18px; }
+    }
+
+    /* Desktop: show PDF controls as normal (no accordion UI) */
+    @media(min-width:1020px){
+      .pdfDetails{ border:0; background:transparent; box-shadow:none; }
+      .pdfDetails summary{ display:none; }
+      .pdfDetailsBody{ border-top:0; padding:0; }
+    }
+
+    /* Main layout */
+    .wrap{
+      max-width:1200px;
+      margin:0 auto;
+      padding:14px 14px calc(var(--bar-h) + var(--safe-b) + 18px);
+    }
+    .grid{ display:grid; grid-template-columns: 1fr; gap:14px; }
+    @media(min-width:1020px){
+      .grid{ grid-template-columns: 1fr 420px; }
+    }
+    .card{
+      background:var(--panel);
+      border:2px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .cardHead{
+      padding:12px 14px;
+      border-bottom:2px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.88));
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .cardHead b{ font-size:16px; }
+    .hint{ color:var(--muted); font-size:13px; line-height:1.5; }
+
+    /* Viewer */
     .viewer{
       position:relative;
       width:100%;
-      border:1px solid var(--line);
-      border-radius:16px;
       overflow:hidden;
-      background:#0a0f18;
-      min-height:60vh; /* スマホで効く */
+      overflow:auto;
+      -webkit-overflow-scrolling: touch;
+      background:
+        repeating-linear-gradient(0deg, #eff6ff, #eff6ff 26px, #ffffff 26px, #ffffff 52px);
+      min-height:68vh;
     }
-    @media(min-width:900px){
-      .viewer{ min-height:720px; }
-    }
-
+    @media(min-width:1020px){ .viewer{ min-height:72vh; } }
     #pdfCanvas,#overlay{ display:block; width:100%; height:auto; }
     #overlay{ position:absolute; inset:0; touch-action:none; }
+    #canvasWrap{
+      position:relative;
+      display:inline-block;
+      line-height:0;
+    }
+    .viewer.pan #overlay{ cursor:grab; }
+    .viewer.pan #overlay:active{ cursor:grabbing; }
 
-    .overlayLoading{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; z-index:9999; }
-    .overlayLoading.on{ display:flex; }
-    .spinner{ width:44px; height:44px; border-radius:50%; border:4px solid rgba(255,255,255,.15); border-top-color:rgba(110,168,254,.9); animation:spin 1s linear infinite; }
-    @keyframes spin{ to{ transform:rotate(360deg); } }
+    .underPdf{
+      padding:14px;
+      border-top:2px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,241,184,.40), rgba(255,255,255,.92));
+    }
+    .row{ display:flex; gap:12px; flex-wrap:wrap; align-items:end; }
+    .row + .row{ margin-top:10px; }
+    label{ display:block; font-weight:900; font-size:14px; color:var(--muted); margin:0 0 6px; }
+    input[type="text"], input[type="number"], input[type="file"]{
+      width:100%;
+      border:2px solid var(--line);
+      border-radius:14px;
+      padding:14px 12px;
+      font-size:18px;
+      outline:none;
+      background:#fff;
+      color:var(--text);
+    }
+    .field{ flex:1; min-width:180px; }
 
-    /* ===== Mobile: PDF first, controls as bottom sheet ===== */
-    @media (max-width:899px){
-      .wrap{
-        padding-bottom: calc(var(--sheet-peek) + var(--safe-b) + 12px);
-      }
+    .btn{
+      border:0;
+      border-radius:16px;
+      padding:14px 14px;
+      min-height:54px;
+      font-weight:900;
+      font-size:18px;
+      cursor:pointer;
+      box-shadow:0 6px 0 rgba(0,0,0,.05);
+      color:var(--text);
+      user-select:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .btn:active{ transform:translateY(1px); box-shadow:0 5px 0 rgba(0,0,0,.05); }
+    .btn:disabled{ opacity:.55; cursor:not-allowed; transform:none; }
+    .btnSky{ background:var(--sky); }
+    .btnMint{ background:var(--mint); }
+    .btnPeach{ background:var(--peach); }
+    .btnLav{ background:var(--lav); }
+    .btnLemon{ background:var(--lemon); }
 
-      /* Keep PDF large */
-      .viewer{
-        min-height: calc(100dvh - var(--sheet-peek) - 120px);
-      }
+    .status{
+      font-size:14px;
+      color:var(--muted);
+      padding:12px;
+      border:2px dashed rgba(82,96,122,.35);
+      border-radius:16px;
+      background:rgba(255,255,255,.75);
+      white-space:pre-wrap;
+    }
+    .status.compact{ font-size:13px; padding:10px; }
 
-      /* Bottom sheet */
-      .sheetRoot{ height:0; }
-      .sheetToggle{
-        position:absolute;
-        opacity:0;
-        pointer-events:none;
-      }
-      .sheetPanel{
+    .kpiRow{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .kpiRow.compact{ margin-top:0; }
+    .kpi{
+      flex:1;
+      min-width:220px;
+      border:2px solid var(--line);
+      border-radius:16px;
+      padding:12px;
+      background:#fff;
+      box-shadow:0 4px 0 rgba(0,0,0,.04);
+    }
+    .kpi .k{ color:var(--muted); font-weight:900; font-size:14px; }
+    .kpi .v{ font-weight:900; font-size:26px; margin-top:4px; }
+    .kpiRow.compact .kpi{ min-width:140px; padding:10px; }
+    .kpiRow.compact .kpi .k{ font-size:12px; }
+    .kpiRow.compact .kpi .v{ font-size:18px; }
+    .kpi.blue{ background:rgba(207,232,255,.75); }
+    .kpi.orange{ background:rgba(255,217,201,.75); }
+
+    /* Estimate panel (PC: normal, Mobile: drawer) */
+    .panelBody{ padding:14px; }
+    .section{
+      border:2px solid rgba(82,96,122,.16);
+      background:rgba(255,255,255,.78);
+      border-radius:16px;
+      padding:12px;
+    }
+    .section + .section{ margin-top:12px; }
+    .sectionTitle{ font-weight:900; font-size:16px; margin-bottom:10px; }
+    .estimatePaper{
+      border:2px dashed rgba(82,96,122,.35);
+      border-radius:16px;
+      background:#fff;
+      padding:12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono CJK JP", monospace;
+      font-size:13px;
+      line-height:1.6;
+      white-space:pre-wrap;
+      color:var(--text);
+    }
+
+    /* Bottom bar */
+    .bottomBar{
+      position:fixed;
+      left:12px; right:12px;
+      bottom:12px;
+      max-width:1200px;
+      margin:0 auto;
+      background:rgba(255,255,255,.95);
+      border:2px solid var(--line);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+      padding:10px;
+      padding-bottom: calc(10px + var(--safe-b));
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      z-index:40;
+    }
+    .tab{
+      border:2px solid var(--line);
+      border-radius:14px;
+      background:#fff;
+      padding:12px 12px;
+      min-height:52px;
+      font-weight:900;
+      font-size:16px;
+      cursor:pointer;
+      box-shadow:0 4px 0 rgba(0,0,0,.04);
+      user-select:none;
+    }
+    .tab:active{ transform:translateY(1px); box-shadow:0 3px 0 rgba(0,0,0,.04); }
+    .tab.on{ background:rgba(207,232,255,.85); border-color:rgba(110,168,254,.6); }
+    .zoomGroup{ display:flex; gap:8px; align-items:center; margin-left:auto; }
+    .zoomLabel{
+      border:2px dashed rgba(82,96,122,.35);
+      border-radius:14px;
+      padding:12px 12px;
+      min-height:52px;
+      font-weight:900;
+      font-size:16px;
+      background:rgba(255,255,255,.8);
+    }
+    .actions{ display:flex; gap:10px; }
+    @media(max-width:780px){
+      /* shrink bottom bar to ~80% */
+      .bottomBar{ padding:8px; padding-bottom: calc(8px + var(--safe-b)); gap:8px; }
+      .tab{ padding:10px 10px; min-height:44px; font-size:14px; border-radius:12px; }
+      .zoomLabel{ padding:10px 10px; min-height:44px; font-size:14px; }
+      .zoomGroup{ width:100%; margin-left:0; justify-content:space-between; }
+      .actions{ width:100%; }
+      .actions .tab{ flex:1; text-align:center; }
+    }
+
+    /* Mobile: single tab panel (replaces old drawers) */
+    .mobilePanel{ display:none; }
+    @media(max-width:1019px){
+      :root{ --bar-h: 56px; } /* mobilePanel minimized height (also updated by JS) */
+      .grid{ grid-template-columns: 1fr; }
+      /* hide right estimate panel on mobile (content is moved into mobilePanel by JS) */
+      #estimatePanel{ display:none; }
+      /* hide bottom bar on mobile (avoid overlap; unified into mobilePanel) */
+      .bottomBar{ display:none; }
+
+      .mobilePanel{
+        display:block;
         position:fixed;
-        left:12px;
-        right:12px;
-        bottom:12px;
-        max-width:1100px;
+        left:12px; right:12px;
+        bottom: calc(12px + var(--safe-b));
+        max-width:1200px;
         margin:0 auto;
-
-        padding:0;
+        z-index:45;
+        background:rgba(255,255,255,.97);
+        border:2px solid var(--line);
         border-radius:18px;
+        box-shadow:var(--shadow);
         overflow:hidden;
-        z-index:50;
+        max-height: min(50dvh, 520px);
+      }
 
-        max-height: calc(var(--sheet-max) + var(--safe-b));
-        transform: translateY(calc(100% - var(--sheet-peek)));
-        transition: transform .18s ease;
+      /* Header height ~50%: tighter padding & smaller buttons */
+      .mobilePanelHead{
+        position:relative;
+        display:flex;
+        gap:8px;
+        align-items:center;
+        padding:8px 10px;
+        border-bottom:2px solid var(--line);
+        background:linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.88));
       }
-      .sheetToggle:checked + .sheetPanel{
-        transform: translateY(0);
+      /* grab handle (tap target) */
+      .panelHandle{
+        position:absolute;
+        left:50%;
+        top:4px;
+        transform:translateX(-50%);
+        width:64px;
+        height:18px;
+        border:0;
+        background:transparent;
+        padding:0;
+        cursor:pointer;
       }
-      .sheetHandle{
+      .panelHandle::before{
+        content:"";
+        position:absolute;
+        left:50%;
+        top:7px;
+        transform:translateX(-50%);
+        width:44px;
+        height:4px;
+        border-radius:999px;
+        background:rgba(82,96,122,.28);
+      }
+      .mobileTabs{ display:flex; gap:6px; flex-wrap:wrap; }
+      .tab.mini{
+        padding:8px 10px;
+        min-height:38px;
+        font-size:13px;
+        border-radius:12px;
+      }
+      .tab.mini.iconOnly{
+        width:44px;
+        padding:8px;
         display:flex;
         align-items:center;
-        gap:10px;
-        padding:12px;
-        border-bottom:1px solid var(--line);
-        background: rgba(13,20,34,.92);
-        backdrop-filter: blur(8px);
+        justify-content:center;
+      }
+      .tab.mini.iconOnly svg{ width:18px; height:18px; display:block; }
+
+      .mobilePanelBody{
+        padding:10px;
+        overflow:auto;
+        max-height: calc(min(50dvh, 520px) - 54px);
+        -webkit-overflow-scrolling: touch;
+      }
+      .mobileCommon{ display:grid; gap:10px; }
+      .mobileTabBody{ display:none; margin-top:10px; }
+      .mobileTabBody.on{ display:block; }
+    }
+
+    /* Minimized state: show only header */
+    .mobilePanel.min{ max-height: 56px; }
+    .mobilePanel.min .mobilePanelBody{ display:none; }
+
+    /* Desktop: hide mobile open buttons */
+    @media(min-width:1020px){
+      .tabMobilePanel{ display:none; }
+    }
+
+    /* Mobile: hide the big status block under PDF (details via gear) */
+    @media(max-width:1019px){
+      #status{ display:none; }
+    }
+
+    .overlayLoading{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:9999; }
+    .overlayLoading.on{ display:flex; }
+    .spinner{ width:44px; height:44px; border-radius:50%; border:4px solid rgba(0,0,0,.10); border-top-color:rgba(110,168,254,.95); animation:spin 1s linear infinite; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+
+    /* Toast (proof / status) */
+    .toastWrap{
+      position:fixed;
+      left:12px; right:12px;
+      top: calc(12px + 74px);
+      max-width:720px;
+      margin:0 auto;
+      z-index:9998;
+      pointer-events:none;
+    }
+    .toast{
+      display:none;
+      border:2px solid var(--line);
+      background:rgba(255,255,255,.96);
+      border-radius:16px;
+      padding:10px 12px;
+      box-shadow:var(--shadow);
+      font-weight:900;
+    }
+    .toast.on{ display:block; }
+    .toast small{ display:block; margin-top:2px; color:var(--muted); font-weight:800; }
+    .toast.error{ border-color:rgba(255,120,96,.55); background:rgba(255,217,201,.85); }
+
+    /* Mobile-only blocks under PDF */
+    .mobileOnly{ display:none; }
+    @media(max-width:1019px){
+      .mobileOnly{ display:block; }
+    }
+    .mobileOnlyInline{ display:none; }
+    @media(max-width:1019px){
+      .mobileOnlyInline{ display:inline-flex; }
+    }
+
+    /* Mobile zoom row: force one line */
+    @media(max-width:1019px){
+      .zoomRowMobile{
+        display:flex;
+        flex-wrap:nowrap;
+        align-items:center;
+        gap:8px;
+        overflow-x:auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .zoomRowMobile .zoomLabel{
+        flex:0 0 auto;
         cursor:pointer;
         user-select:none;
       }
-      .sheetGrab{
-        width:36px;
-        height:4px;
-        border-radius:999px;
-        background: rgba(255,255,255,.25);
-        margin-right:auto;
-      }
-      .sheetTitle{ font-weight:800; }
-      .sheetHint{ font-size:12px; color: var(--muted); margin-left:auto; }
-      .sheetBody{
-        padding:12px;
-        padding-bottom: calc(12px + var(--safe-b));
-        max-height: calc(var(--sheet-max) - 52px);
-        overflow:auto;
+      .zoomRowMobile .tab.mini.iconOnly{ width:44px; }
+      .scaleTopRowMobile{
+        display:flex;
+        flex-wrap:nowrap;
+        gap:8px;
+        align-items:end;
+        overflow-x:auto;
         -webkit-overflow-scrolling: touch;
       }
-
-      /* Touch targets */
-      .btn{ min-height:44px; padding:12px 14px; }
-      input[type="text"], input[type="number"]{ padding:12px; }
+      .scaleTopRowMobile .field{ min-width:140px; flex:1; }
+      .scaleTopRowMobile input[type="number"]{ padding:10px 10px; font-size:16px; }
+      .scaleTopRowMobile .btn{ min-height:44px; padding:10px 12px; font-size:16px; }
     }
 
-    /* Desktop: show controls normally (no sheet affordance) */
-    @media (min-width:900px){
-      .sheetToggle, .sheetHandle{ display:none; }
-      .sheetPanel{ padding:12px; }
-      .sheetBody{ padding:0; max-height:none; overflow:visible; }
+    /* Mobile status panel (gear) */
+    .iconBtn{
+      border:2px solid var(--line);
+      background:#fff;
+      border-radius:14px;
+      min-height:44px;
+      min-width:44px;
+      padding:8px;
+      cursor:pointer;
+      box-shadow:0 4px 0 rgba(0,0,0,.04);
+      user-select:none;
+      align-items:center;
+      justify-content:center;
+    }
+    .iconBtn:active{ transform:translateY(1px); box-shadow:0 3px 0 rgba(0,0,0,.04); }
+    .iconBtn svg{ width:20px; height:20px; display:block; }
+    .mobileStatusOverlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.25);
+      display:none;
+      z-index:9997;
+      padding:12px;
+    }
+    .mobileStatusOverlay.on{ display:block; }
+    .mobileStatusCard{
+      max-width:720px;
+      margin:0 auto;
+      background:rgba(255,255,255,.98);
+      border:2px solid var(--line);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .mobileStatusHead{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding:12px 14px;
+      border-bottom:2px solid var(--line);
+      font-weight:900;
+    }
+    .mobileStatusBody{
+      padding:12px 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono CJK JP", monospace;
+      font-size:13px;
+      line-height:1.6;
+      white-space:pre-wrap;
+      color:var(--text);
+      max-height: min(50dvh, 420px);
+      overflow:auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* PC scale popup (above bottom bar) */
+    .scalePopupBackdrop{ display:none; }
+    .scalePopup{ display:none; }
+    @media(min-width:1020px){
+      .scalePopupBackdrop{
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.18);
+        z-index:60;
+      }
+      .scalePopupBackdrop.on{ display:block; }
+      .scalePopup{
+        position:fixed;
+        left:12px; right:12px;
+        bottom: calc(12px + var(--bar-h) + 12px);
+        max-width:1200px;
+        margin:0 auto;
+        background:rgba(255,255,255,.98);
+        border:2px solid var(--line);
+        border-radius:18px;
+        box-shadow:var(--shadow);
+        z-index:61;
+        overflow:hidden;
+      }
+      .scalePopup.on{ display:block; }
+      .scalePopupHead{
+        display:flex;
+        gap:10px;
+        align-items:center;
+        padding:10px 12px;
+        border-bottom:2px solid var(--line);
+        font-weight:900;
+      }
+      .scalePopupBody{
+        padding:10px 12px;
+      }
+      /* make the moved row fit nicely */
+      .scalePopupBody .row{ margin-top:0; }
+      .scalePopupBody input[type="number"]{ font-size:16px; padding:12px 10px; }
+      .scalePopupBody .btn{ min-height:48px; padding:12px 12px; font-size:16px; }
     }
   </style>
 
@@ -155,6 +654,8 @@
     const GAS_API_URL = './gas_proxy.php';
     // オプション: APIキー（Code.gsでAPI_KEYを設定した場合のみ必要）
     const API_KEY = '';
+    // オプション: プロキシ共有キー（gas_proxy.phpで共有キーを有効にした場合のみ）
+    const PROXY_KEY = '';
 
     /**
      * GAS API呼び出し（google.script.runの代替）
@@ -162,6 +663,7 @@
     async function callGasApi(action, data, options = {}) {
       const maxRetries = options.maxRetries || 3;
       const retryDelay = options.retryDelay || 1000;
+      const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 30000;
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
@@ -175,28 +677,51 @@
             requestBody.apiKey = API_KEY;
           }
           
-          const response = await fetch(GAS_API_URL, {
-            method: 'POST',
-            headers: {
-              // CORSプリフライト回避（GAS WebアプリはOPTIONSのCORSが通らないことがある）
-              'Content-Type': 'text/plain',
-            },
-            body: JSON.stringify(requestBody)
-          });
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+          const headers = {
+            // CORSプリフライト回避（GAS WebアプリはOPTIONSのCORSが通らないことがある）
+            'Content-Type': 'text/plain; charset=utf-8',
+          };
+          if (PROXY_KEY) headers['X-Proxy-Key'] = PROXY_KEY;
+
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+          let response;
+          try{
+            response = await fetch(GAS_API_URL, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timer);
           }
           
-          const result = await response.json();
+          const rawText = await response.text();
           
-          if (!result.success) {
+          if (!response.ok) {
+            const hint = rawText ? `\n---\n${rawText.slice(0, 600)}` : '';
+            throw new Error(`HTTP error! status: ${response.status}${hint}`);
+          }
+
+          let result;
+          try{
+            result = rawText ? JSON.parse(rawText) : null;
+          }catch(parseErr){
+            throw new Error(`Invalid JSON response from server.\n---\n${(rawText || "").slice(0, 600)}`);
+          }
+          
+          if (!result || !result.success) {
             throw new Error(result.error || 'API request failed');
           }
           
           return result.data;
           
         } catch (error) {
+          if (error && error.name === 'AbortError') {
+            error = new Error(`Request timeout (${timeoutMs}ms)`);
+          }
           console.error(`API call failed (attempt ${attempt}/${maxRetries}):`, error);
           
           if (attempt === maxRetries) {
@@ -261,87 +786,305 @@
 
 <body>
   <div class="overlayLoading" id="loading"><div class="spinner"></div></div>
+  <div class="toastWrap" aria-live="polite" aria-atomic="true">
+    <div class="toast" id="toast">
+      <div id="toastTitle">完了</div>
+      <small id="toastSub">—</small>
+    </div>
+  </div>
+  <div class="mobileStatusOverlay" id="mobileStatusOverlay" aria-hidden="true">
+    <div class="mobileStatusCard" role="dialog" aria-modal="true" aria-label="詳細">
+      <div class="mobileStatusHead">
+        <div>詳細</div>
+        <button class="iconBtn" type="button" id="btnMobileStatusClose" aria-label="閉じる" style="margin-left:auto;">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="mobileStatusBody" id="mobileStatusText">—</div>
+    </div>
+  </div>
+
+  <!-- mobile tab panel uses JS (no checkbox drawers) -->
+
+  <div class="topSticky">
+    <div class="topInner">
+      <div class="titleRow">
+        <div class="title">乾式二重床 積算・拾い出しツール</div>
+        <div class="sub">現場向け（見やすく・大きく）</div>
+        <button class="iconBtn mobileOnlyInline" type="button" id="btnMobileStatus" aria-label="詳細を表示" style="margin-left:auto;">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M19.4 15a8.4 8.4 0 0 0 .1-2l2-1.2-2-3.4-2.3.8a8.3 8.3 0 0 0-1.7-1l-.3-2.4H11l-.3 2.4a8.3 8.3 0 0 0-1.7 1L6.7 8.4l-2 3.4 2 1.2a8.4 8.4 0 0 0 .1 2l-2 1.2 2 3.4 2.3-.8a8.3 8.3 0 0 0 1.7 1l.3 2.4h4l.3-2.4a8.3 8.3 0 0 0 1.7-1l2.3.8 2-3.4-2-1.2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="progress" id="progress">
+        <div class="step on" id="stepPdf"><strong>① PDF</strong>選ぶ</div>
+        <div class="step" id="stepScale"><strong>② 縮尺</strong>決める</div>
+        <div class="step" id="stepArea"><strong>③ 床㎡</strong>囲う</div>
+        <div class="step" id="stepWall"><strong>④ 壁m</strong>なぞる</div>
+        <div class="step" id="stepEstimate"><strong>⑤ 見積</strong>保存/送信</div>
+      </div>
+      <div id="pdfTopSlot">
+        <details class="pdfDetails" id="pdfDetails" open>
+          <summary>
+            <span>PDF / ページ</span>
+            <span class="summaryHint" id="pdfSummaryHint">未選択</span>
+          </summary>
+          <div class="pdfDetailsBody" id="pdfTopSlotBody"></div>
+        </details>
+      </div>
+    </div>
+  </div>
 
   <div class="wrap">
-    <div class="title">面積計算（PDF）｜スマホで囲って㎡→スプシ保存（iPhone Safari最適化）</div>
-
     <div class="grid">
-      <div class="sheetRoot">
-        <input id="sheetToggle" class="sheetToggle" type="checkbox" />
+      <div class="card viewerCard">
+        <div class="cardHead">
+          <b>図面（PDF）</b>
+          <span class="hint">縮尺はPDFの下に大きく。操作は下の固定バー。</span>
+        </div>
 
-        <div class="card sheetPanel">
-          <label class="sheetHandle" for="sheetToggle">
-            <span class="sheetGrab"></span>
-            <span class="sheetTitle">操作パネル</span>
-            <span class="sheetHint">タップで開閉</span>
-          </label>
+        <!-- Mobile: zoom controls between header and PDF viewer (one-line) -->
+        <div class="row mobileOnly zoomRowMobile" id="mobileZoomRow" style="margin:10px 14px 0;">
+          <button class="tab mini iconOnly" type="button" id="btnZoomOutM" aria-label="ズームアウト" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <div class="zoomLabel" id="zoomLabelMWrap" style="min-height:38px; padding:8px 10px; font-size:13px;">
+            <span id="zoomLabelM">100%</span>
+          </div>
+          <button class="tab mini iconOnly" type="button" id="btnZoomInM" aria-label="ズームイン" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button class="tab mini iconOnly" type="button" id="btnUndoM" aria-label="戻す">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 7H5v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 11c2-3 5-5 9-5 4.5 0 8 3.5 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button class="tab mini" type="button" id="btnPanM">移動</button>
+        </div>
 
-          <div class="sheetBody">
+        <!-- Mobile: scale input row (mode + input + confirm) -->
+        <div class="row mobileOnly scaleTopRowMobile" id="scaleTopSlot" style="margin:10px 14px 0;">
+          <button class="tab mini" type="button" id="btnScaleM">縮尺</button>
+        </div>
+
+        <div class="viewer" id="viewer">
+          <div id="canvasWrap">
+            <canvas id="pdfCanvas"></canvas>
+            <canvas id="overlay"></canvas>
+          </div>
+        </div>
+        <div class="underPdf">
+          <div id="pdfUnderSlot">
+            <div class="row pdfTopBar" id="pdfControls">
+              <div class="field">
+                <label>PDF（アップロード）</label>
+                <input id="pdfFile" type="file" accept="application/pdf" />
+              </div>
+              <div class="field" style="max-width:320px;">
+                <label>ページ</label>
+                <div class="pageStepper">
+                  <button class="stepperBtn" type="button" id="pageDec" aria-label="前のページ">－</button>
+                  <input id="pageNo" type="number" min="1" step="1" value="1" />
+                  <button class="stepperBtn" type="button" id="pageInc" aria-label="次のページ">＋</button>
+                </div>
+              </div>
+              <button class="btn btnSky" id="btnRender" disabled>表示</button>
+            </div>
+          </div>
+
+          <div id="scaleSlot">
+            <div id="scaleBlock" class="row">
+              <div class="field">
+                <label>縮尺：実際の長さ（mm）</label>
+                <input id="actualMm" type="number" min="1" step="1" placeholder="例：5000" />
+              </div>
+              <button class="btn btnLemon" id="btnApplyScale" disabled>縮尺を確定</button>
+            </div>
+          </div>
+
+          <div class="kpiRow">
+            <div class="kpi blue">
+              <div class="k">床面積</div>
+              <div class="v" id="kpiArea">—㎡</div>
+            </div>
+            <div class="kpi orange">
+              <div class="k">壁長さ</div>
+              <div class="v" id="kpiWall">—m</div>
+            </div>
+          </div>
+
+          <!-- Mobile: email/project inputs under PDF -->
+          <div id="basicInfoSlot" class="mobileOnly" style="margin-top:10px;"></div>
+
+          <!-- Mobile: always-visible save/send under PDF -->
+          <div class="row mobileOnly" id="mobileSaveSendRow" style="margin-top:10px;">
+            <button class="btn btnMint" type="button" id="btnSaveM" disabled>保存</button>
+            <button class="btn btnPeach" type="button" id="btnSendM" disabled>送信</button>
+          </div>
+
+          <div class="row">
+            <div class="status" id="status">PDF未選択</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="estimatePanel">
+        <div class="cardHead">
+          <b>簡易見積</b>
+          <span class="hint">PCは右に常時表示。スマホは下の「見積」タブで開く。</span>
+        </div>
+        <div id="estimatePanelSlot">
+          <div class="panelBody" id="estimatePanelBody">
+          <div class="section" id="estimateMiniSummary" style="margin-bottom:12px;">
+            <div class="sectionTitle">サマリ</div>
+            <div class="hint" id="estimateMiniSummaryText">縮尺：— / 床：— / 壁：—</div>
+          </div>
+          <div id="basicInfoHome">
+          <div class="section" id="basicInfoBlock">
+            <div class="sectionTitle">基本</div>
             <div class="row">
               <div class="field">
                 <label>案件名（任意）</label>
                 <input id="projectName" type="text" placeholder="例：A様邸 1F" />
               </div>
+              <div class="field">
+                <label>見積送付先メール（必須）</label>
+                <input id="customerEmail" type="text" inputmode="email" placeholder="例：example@example.com" />
+              </div>
             </div>
+          </div>
+          </div>
 
+          <div class="section">
+            <div class="sectionTitle">単価（変更可）</div>
             <div class="row">
               <div class="field">
-                <label>PDF（スマホからアップロード）</label>
-                <input id="pdfFile" type="file" accept="application/pdf" />
+                <label>床組㎡単価（円/㎡）</label>
+                <input id="unitFloorPerM2" type="number" min="0" step="1" value="1500" />
+              </div>
+              <div class="field">
+                <label>際根太ｍ単価（円/m）</label>
+                <input id="unitEdgePerM" type="number" min="0" step="1" value="400" />
               </div>
             </div>
-
             <div class="row">
               <div class="field">
-                <label>ページ</label>
-                <input id="pageNo" type="number" min="1" step="1" value="1" />
+                <label>支持脚（円/本）</label>
+                <input id="unitSupportFoot" type="number" min="0" step="1" value="230" />
               </div>
-              <button class="btn primary" id="btnRender" disabled>表示</button>
+              <div class="field">
+                <label>パーチ合板（円/枚）</label>
+                <input id="unitPlywood" type="number" min="0" step="1" value="1800" />
+              </div>
             </div>
-
-            <div class="row">
-              <span class="pill">モード：<strong id="modeLabel">スケール</strong></span>
-              <button class="btn primary" id="btnModeScale">スケール</button>
-              <button class="btn primary" id="btnModePoly">囲い</button>
-            </div>
-
             <div class="row">
               <div class="field">
-                <label>スケール：実際の長さ（mm）</label>
-                <input id="actualMm" type="number" min="1" step="1" placeholder="例：5000" />
+                <label>ベニヤ12mm（円/枚）</label>
+                <input id="unitVeneer12" type="number" min="0" step="1" value="2500" />
               </div>
-              <button class="btn ok" id="btnApplyScale" disabled>スケール確定</button>
-            </div>
-
-            <div class="row">
-              <button class="btn warn" id="btnUndo">1つ戻す</button>
-              <button class="btn danger" id="btnClear">リセット</button>
-            </div>
-
-            <div class="row">
-              <button class="btn ok" id="btnSave" disabled>スプシへ保存</button>
-            </div>
-
-            <div class="row">
-              <div class="hint">
-                <b>手順</b><br/>
-                1) PDFを選ぶ → 表示<br/>
-                2) <b>スケール</b>：寸法線の両端を2回タップ → mm入力 → 確定<br/>
-                3) <b>囲い</b>：範囲をタップで囲う（3点以上）<br/>
-                4) 面積(㎡) → 保存
+              <div class="field">
+                <label>LVL間柱（円/束）※任意</label>
+                <input id="unitLvl" type="number" min="0" step="1" value="3225" />
               </div>
             </div>
+          </div>
 
-            <div class="row"><div class="status" id="status">PDF未選択</div></div>
+          <div class="section">
+            <div class="sectionTitle">見積プレビュー</div>
+            <div class="estimatePaper" id="estimatePreview">（まだ見積が作れません：縮尺確定→床㎡/壁mを入力）</div>
+          </div>
+
+          <div class="section">
+            <div class="sectionTitle">チェック・注意</div>
+            <div class="hint">
+              □ PDFが正確に表示 / □ 床㎡が正しく囲えた / □ 壁mの抜けなし / □ 単価の入れ忘れなし<br/>
+              ※ 本積算は図面PDFに基づき算出しています。現場条件で数量が変わる場合があります。
+            </div>
+          </div>
           </div>
         </div>
       </div>
+    </div>
+  </div>
 
-      <div class="card viewerCard">
-        <div class="viewer" id="viewer">
-          <canvas id="pdfCanvas"></canvas>
-          <canvas id="overlay"></canvas>
+  <div class="bottomBar" aria-label="固定操作バー">
+    <button class="tab on" id="btnModeScale">スケール</button>
+    <button class="tab" id="btnModePoly">床㎡</button>
+    <button class="tab" id="btnModeWall">壁m</button>
+    <button class="tab" id="btnModePan">移動</button>
+    <button class="tab tabMobilePanel" id="btnOpenScale" style="background:rgba(255,241,184,.85);">縮尺</button>
+    <button class="tab tabMobilePanel" id="btnOpenEstimate" style="background:rgba(231,219,255,.75);">見積</button>
+
+    <div class="zoomGroup">
+      <button class="tab" id="btnZoomOut" disabled>－</button>
+      <div class="zoomLabel">ズーム：<span id="zoomLabel">100%</span></div>
+      <button class="tab" id="btnZoomIn" disabled>＋</button>
+      <button class="tab" id="btnZoomReset" disabled>リセット</button>
+    </div>
+
+    <div class="actions">
+      <button class="tab" id="btnUndo">戻す</button>
+      <button class="tab" id="btnClear">リセット</button>
+      <button class="tab" id="btnSave" disabled style="background:rgba(191,238,226,.85);">保存</button>
+      <button class="tab" id="btnSend" disabled style="background:rgba(255,217,201,.85);">送信</button>
+    </div>
+  </div>
+
+  <!-- PC: scale popup (uses existing #scaleBlock) -->
+  <div id="scalePopupBackdrop" class="scalePopupBackdrop" aria-hidden="true"></div>
+  <div id="scalePopup" class="scalePopup" aria-hidden="true">
+    <div class="scalePopupHead">
+      <div>縮尺</div>
+      <button class="iconBtn" type="button" id="btnScalePopupClose" aria-label="閉じる" style="margin-left:auto;">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="scalePopupBody" id="scalePopupSlot"></div>
+  </div>
+
+  <!-- Mobile: single floating panel with 5 tabs -->
+  <div class="mobilePanel" id="mobilePanel" aria-label="スマホ操作パネル">
+    <div class="mobilePanelHead">
+      <button class="panelHandle" type="button" id="btnPanelHandle" aria-label="パネルを開閉"></button>
+      <div class="mobileTabs" role="tablist" aria-label="操作タブ">
+        <button class="tab mini on" type="button" data-mtab="area">床㎡</button>
+        <button class="tab mini" type="button" data-mtab="wall">壁m</button>
+        <button class="tab mini" type="button" data-mtab="estimate">見積</button>
+      </div>
+      <button class="tab mini iconOnly" type="button" id="btnPanelMin" aria-label="パネルを閉じる" aria-expanded="true"></button>
+    </div>
+    <div class="mobilePanelBody">
+      <div class="mobileCommon">
+        <div class="row">
+          <button class="btn btnLav" type="button" id="btnUndo2">戻す</button>
+          <button class="btn btnPeach" type="button" id="btnClear2">リセット</button>
         </div>
+      </div>
+
+      <div class="mobileTabBody" data-mtab-body="area">
+        <div class="hint">
+          <b>床㎡</b><br/>
+          範囲をタップで囲います（3点以上）。
+        </div>
+        <div class="row">
+          <button class="btn btnSky" type="button" id="btnSetArea">床㎡モードにする</button>
+          <button class="btn btnLav" type="button" id="btnOpenScaleFromArea">縮尺へ</button>
+        </div>
+      </div>
+
+      <div class="mobileTabBody" data-mtab-body="wall">
+        <div class="hint">
+          <b>壁m</b><br/>
+          壁際をタップでなぞります（2点以上）。
+        </div>
+        <div class="row">
+          <button class="btn btnPeach" type="button" id="btnSetWall">壁mモードにする</button>
+          <button class="btn btnLav" type="button" id="btnOpenScaleFromWall">縮尺へ</button>
+        </div>
+      </div>
+
+      <div class="mobileTabBody" data-mtab-body="estimate">
+        <div id="mobileEstimateSlot"></div>
       </div>
     </div>
   </div>
@@ -369,45 +1112,261 @@
     pixelDist: null,
 
     polyPts: [],
+    wallPts: [],
+
+    zoom: 1,
+    lastOverlayW: null,
+    lastOverlayH: null,
+
+    lastSavedAt: null,
+    lastSentAt: null,
   };
+
+  let pcScalePopupOpen = false;
 
   const el = {
     loading: document.getElementById("loading"),
+    toast: document.getElementById("toast"),
+    toastTitle: document.getElementById("toastTitle"),
+    toastSub: document.getElementById("toastSub"),
+    btnMobileStatus: document.getElementById("btnMobileStatus"),
+    mobileStatusOverlay: document.getElementById("mobileStatusOverlay"),
+    mobileStatusText: document.getElementById("mobileStatusText"),
+    btnMobileStatusClose: document.getElementById("btnMobileStatusClose"),
     status: document.getElementById("status"),
     pdfFile: document.getElementById("pdfFile"),
     pageNo: document.getElementById("pageNo"),
+    pageDec: document.getElementById("pageDec"),
+    pageInc: document.getElementById("pageInc"),
     btnRender: document.getElementById("btnRender"),
     btnModeScale: document.getElementById("btnModeScale"),
     btnModePoly: document.getElementById("btnModePoly"),
-    modeLabel: document.getElementById("modeLabel"),
+    btnModeWall: document.getElementById("btnModeWall"),
+    btnModePan: document.getElementById("btnModePan"),
+    btnOpenScale: document.getElementById("btnOpenScale"),
+    btnOpenEstimate: document.getElementById("btnOpenEstimate"),
+    zoomLabel: document.getElementById("zoomLabel"),
+    btnZoomOut: document.getElementById("btnZoomOut"),
+    btnZoomIn: document.getElementById("btnZoomIn"),
+    btnZoomReset: document.getElementById("btnZoomReset"),
+    btnZoomOutM: document.getElementById("btnZoomOutM"),
+    btnZoomInM: document.getElementById("btnZoomInM"),
+    btnZoomResetM: document.getElementById("btnZoomResetM"),
+    zoomLabelM: document.getElementById("zoomLabelM"),
+    zoomLabelMWrap: document.getElementById("zoomLabelMWrap"),
+    btnPanM: document.getElementById("btnPanM"),
+    btnScaleM: document.getElementById("btnScaleM"),
+    kpiArea: document.getElementById("kpiArea"),
+    kpiWall: document.getElementById("kpiWall"),
+    stepPdf: document.getElementById("stepPdf"),
+    stepScale: document.getElementById("stepScale"),
+    stepArea: document.getElementById("stepArea"),
+    stepWall: document.getElementById("stepWall"),
+    stepEstimate: document.getElementById("stepEstimate"),
+    pdfTopSlot: document.getElementById("pdfTopSlot"),
+    pdfTopSlotBody: document.getElementById("pdfTopSlotBody"),
+    pdfDetails: document.getElementById("pdfDetails"),
+    pdfSummaryHint: document.getElementById("pdfSummaryHint"),
+    pdfUnderSlot: document.getElementById("pdfUnderSlot"),
+    pdfControls: document.getElementById("pdfControls"),
+    scaleSlot: document.getElementById("scaleSlot"),
+    scaleBlock: document.getElementById("scaleBlock"),
+    mobileScaleSlot: document.getElementById("mobileScaleSlot"),
+    scaleTopSlot: document.getElementById("scaleTopSlot"),
+    estimatePanelSlot: document.getElementById("estimatePanelSlot"),
+    estimatePanelBody: document.getElementById("estimatePanelBody"),
+    mobileEstimateSlot: document.getElementById("mobileEstimateSlot"),
+    estimateMiniSummaryText: document.getElementById("estimateMiniSummaryText"),
+    basicInfoHome: document.getElementById("basicInfoHome"),
+    basicInfoBlock: document.getElementById("basicInfoBlock"),
+    basicInfoSlot: document.getElementById("basicInfoSlot"),
+    mobilePanel: document.getElementById("mobilePanel"),
+    bottomBar: document.querySelector(".bottomBar"),
+    btnPanelMin: document.getElementById("btnPanelMin"),
+    btnPanelHandle: document.getElementById("btnPanelHandle"),
+    status2: document.getElementById("status2"),
+    kpiArea2: document.getElementById("kpiArea2"),
+    kpiWall2: document.getElementById("kpiWall2"),
+    btnSetPan: document.getElementById("btnSetPan"),
+    btnSetArea: document.getElementById("btnSetArea"),
+    btnSetWall: document.getElementById("btnSetWall"),
+    btnOpenScaleFromArea: document.getElementById("btnOpenScaleFromArea"),
+    btnOpenScaleFromWall: document.getElementById("btnOpenScaleFromWall"),
+    btnSave2: document.getElementById("btnSave2"),
+    btnSend2: document.getElementById("btnSend2"),
+    btnSaveM: document.getElementById("btnSaveM"),
+    btnSendM: document.getElementById("btnSendM"),
+    btnZoomOut2: document.getElementById("btnZoomOut2"),
+    btnZoomIn2: document.getElementById("btnZoomIn2"),
+    btnZoomReset2: document.getElementById("btnZoomReset2"),
+    zoomLabel2: document.getElementById("zoomLabel2"),
+    btnUndo2: document.getElementById("btnUndo2"),
+    btnClear2: document.getElementById("btnClear2"),
+    btnUndoM: document.getElementById("btnUndoM"),
     actualMm: document.getElementById("actualMm"),
     btnApplyScale: document.getElementById("btnApplyScale"),
     btnUndo: document.getElementById("btnUndo"),
     btnClear: document.getElementById("btnClear"),
     btnSave: document.getElementById("btnSave"),
+    btnSend: document.getElementById("btnSend"),
+    scalePopupBackdrop: document.getElementById("scalePopupBackdrop"),
+    scalePopup: document.getElementById("scalePopup"),
+    scalePopupSlot: document.getElementById("scalePopupSlot"),
+    btnScalePopupClose: document.getElementById("btnScalePopupClose"),
     projectName: document.getElementById("projectName"),
+    customerEmail: document.getElementById("customerEmail"),
     pdfCanvas: document.getElementById("pdfCanvas"),
     overlay: document.getElementById("overlay"),
+    canvasWrap: document.getElementById("canvasWrap"),
     viewer: document.getElementById("viewer"),
+    unitFloorPerM2: document.getElementById("unitFloorPerM2"),
+    unitEdgePerM: document.getElementById("unitEdgePerM"),
+    unitSupportFoot: document.getElementById("unitSupportFoot"),
+    unitPlywood: document.getElementById("unitPlywood"),
+    unitVeneer12: document.getElementById("unitVeneer12"),
+    unitLvl: document.getElementById("unitLvl"),
+    estimatePreview: document.getElementById("estimatePreview"),
   };
 
   const ctxPdf = el.pdfCanvas.getContext("2d");
   const ctxOv  = el.overlay.getContext("2d");
 
   function setLoading(on){ el.loading.classList.toggle("on", !!on); }
-  function setStatus(msg){ el.status.textContent = msg; }
+
+  let toastTimer = null;
+  function toast(title, sub, kind){
+    if(!el.toast || !el.toastTitle || !el.toastSub) return;
+    clearTimeout(toastTimer);
+    el.toast.classList.toggle("error", kind === "error");
+    el.toastTitle.textContent = title || "";
+    el.toastSub.textContent = sub || "";
+    el.toast.classList.add("on");
+    toastTimer = setTimeout(()=> el.toast.classList.remove("on"), 1800);
+  }
+
+  function fmtTime(ts){
+    if(!ts) return "—";
+    const d = new Date(ts);
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mm = String(d.getMinutes()).padStart(2,"0");
+    return `${hh}:${mm}`;
+  }
+
+  function clampInt(n, min, max){
+    const x = parseInt(String(n || ""), 10);
+    const v = Number.isFinite(x) ? x : min;
+    return Math.min(max, Math.max(min, v));
+  }
+
+  function setStatus(msg){
+    el.status.textContent = msg;
+    if (el.status2) el.status2.textContent = compressStatusTextForMobile(msg);
+    updateMobileStatusPanel();
+  }
+
+  function compressStatusTextForMobile(text){
+    const raw = String(text || "");
+    const lines = raw.split(/\r?\n/);
+    const filtered = [];
+    for(const ln of lines){
+      const s = ln.trim();
+      if(!s) continue;
+      // hide Drive URL / long link lines on mobile
+      if(/^Drive：/.test(s)) continue;
+      if(/^https?:\/\//i.test(s)) continue;
+      filtered.push(ln);
+    }
+    // keep it short on mobile to avoid hiding PDF
+    return filtered.slice(0, 6).join("\n") || raw.split(/\r?\n/).slice(0, 3).join("\n");
+  }
+
+  function buildMobileDetailText(){
+    const raw = buildStatusText();
+    const lines = String(raw || "").split(/\r?\n/);
+    const keep = [];
+    for(const ln of lines){
+      const s = ln.trim();
+      if(!s) continue;
+      if(/^Drive：/.test(s)) continue;
+      if(/^https?:\/\//i.test(s)) continue;
+      // shorten PDF line a bit
+      if(/^PDF：/.test(s)){
+        keep.push(s.length > 44 ? (s.slice(0, 44) + "…") : s);
+        continue;
+      }
+      keep.push(ln);
+    }
+    // keep only key info
+    return keep.slice(0, 10).join("\n") || "—";
+  }
+
+  function setMobileStatusOpen(open){
+    if(!el.mobileStatusOverlay) return;
+    el.mobileStatusOverlay.classList.toggle("on", !!open);
+    el.mobileStatusOverlay.setAttribute("aria-hidden", open ? "false" : "true");
+    updateMobileStatusPanel();
+  }
+
+  function updateMobileStatusPanel(){
+    if(!el.mobileStatusOverlay || !el.mobileStatusText) return;
+    if(!el.mobileStatusOverlay.classList.contains("on")) return;
+    el.mobileStatusText.textContent = buildMobileDetailText();
+  }
 
   function setUiEnabled(ready){
     el.btnRender.disabled = !ready;
     el.btnApplyScale.disabled = !ready;
     el.btnSave.disabled = !ready;
+    el.btnSend.disabled = !ready;
+    if (el.btnSaveM) el.btnSaveM.disabled = !ready;
+    if (el.btnSendM) el.btnSendM.disabled = !ready;
+    el.btnZoomOut.disabled = !ready;
+    el.btnZoomIn.disabled = !ready;
+    el.btnZoomReset.disabled = !ready;
+    if (el.btnZoomOutM) el.btnZoomOutM.disabled = !ready;
+    if (el.btnZoomInM) el.btnZoomInM.disabled = !ready;
+    if (el.btnZoomResetM) el.btnZoomResetM.disabled = !ready;
+    if (el.btnZoomOut2) el.btnZoomOut2.disabled = !ready;
+    if (el.btnZoomIn2) el.btnZoomIn2.disabled = !ready;
+    if (el.btnZoomReset2) el.btnZoomReset2.disabled = !ready;
+  }
+
+  function clamp(n, min, max){ return Math.min(max, Math.max(min, n)); }
+  function roundQuarter(x){ return Math.round(x * 4) / 4; }
+
+  function scalePointArray(pts, rx, ry){
+    if(!pts || !pts.length) return;
+    for(const p of pts){
+      p.x *= rx;
+      p.y *= ry;
+    }
+  }
+
+  function setZoom(nextZoom){
+    state.zoom = clamp(roundQuarter(nextZoom), 0.5, 3.0);
+    if (el.zoomLabel) el.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+    if (el.zoomLabelM) el.zoomLabelM.textContent = `${Math.round(state.zoom * 100)}%`;
+    if (el.zoomLabel2) el.zoomLabel2.textContent = `${Math.round(state.zoom * 100)}%`;
+    if (state.pdfDoc) renderPage(state.renderedPage);
   }
 
   function setMode(mode){
     state.mode = mode;
-    el.modeLabel.textContent = (mode === "scale") ? "スケール" : "囲い";
+    // bottom bar tabs highlight
+    el.btnModeScale.classList.toggle("on", mode === "scale");
+    el.btnModePoly.classList.toggle("on", mode === "poly");
+    el.btnModeWall.classList.toggle("on", mode === "wall");
+    el.btnModePan.classList.toggle("on", mode === "pan");
+    if (el.btnPanM) el.btnPanM.classList.toggle("on", mode === "pan");
+    if (el.btnScaleM) el.btnScaleM.classList.toggle("on", mode === "scale");
+    el.viewer.classList.toggle("pan", mode === "pan");
+    // PC: close scale popup when leaving scale mode
+    if(!isMobileLayout() && pcScalePopupOpen && mode !== "scale"){
+      setPcScalePopupOpen(false);
+    }
     drawOverlay();
     setStatus(buildStatusText());
+    refreshEstimateUi();
   }
 
   function dist(a,b){
@@ -432,6 +1391,300 @@
     return areaMm2 / 1_000_000;
   }
 
+  function computeWallM(){
+    if(!state.mmPerPx) return null;
+    if(state.wallPts.length < 2) return null;
+    let sumPx = 0;
+    for(let i=1;i<state.wallPts.length;i++){
+      sumPx += dist(state.wallPts[i-1], state.wallPts[i]);
+    }
+    const sumMm = sumPx * state.mmPerPx;
+    return sumMm / 1000;
+  }
+
+  function isValidEmail(email){
+    const s = (email || "").trim();
+    if(!s) return false;
+    // 過剰に厳密にはしない（現場用途）
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+  }
+
+  function getUnitPrices(){
+    const n = (v)=> {
+      const x = parseFloat(v);
+      return Number.isFinite(x) && x >= 0 ? x : 0;
+    };
+    return {
+      floorPerM2: n(el.unitFloorPerM2.value),
+      edgePerM: n(el.unitEdgePerM.value),
+      supportFoot: n(el.unitSupportFoot.value),
+      plywood: n(el.unitPlywood.value),
+      veneer12: n(el.unitVeneer12.value),
+      lvl: n(el.unitLvl.value),
+    };
+  }
+
+  function saveUnitPricesToLocalStorage(){
+    try{
+      localStorage.setItem("nikosauna_unitPrices", JSON.stringify(getUnitPrices()));
+    }catch(e){ /* ignore */ }
+  }
+
+  function loadUnitPricesFromLocalStorage(){
+    try{
+      const raw = localStorage.getItem("nikosauna_unitPrices");
+      if(!raw) return;
+      const obj = JSON.parse(raw);
+      const setIfNum = (input, val)=>{
+        const x = parseFloat(val);
+        if(Number.isFinite(x) && x >= 0) input.value = String(x);
+      };
+      setIfNum(el.unitFloorPerM2, obj.floorPerM2);
+      setIfNum(el.unitEdgePerM, obj.edgePerM);
+      setIfNum(el.unitSupportFoot, obj.supportFoot);
+      setIfNum(el.unitPlywood, obj.plywood);
+      setIfNum(el.unitVeneer12, obj.veneer12);
+      setIfNum(el.unitLvl, obj.lvl);
+    }catch(e){ /* ignore */ }
+  }
+
+  function computeAutoQty(areaM2){
+    if(areaM2 == null) return null;
+    const area = Math.max(0, areaM2);
+    return {
+      supportFoot: Math.ceil(area * 2.5),
+      plywood: Math.ceil(area / 0.9),
+      veneer12: Math.ceil(area / 1.2),
+    };
+  }
+
+  function buildEstimateText(){
+    const area = computeAreaM2();
+    const wallM = computeWallM();
+    if(area == null && wallM == null) return null;
+    const unit = getUnitPrices();
+    const qty = computeAutoQty(area);
+
+    const safeArea = area ?? 0;
+    const safeWall = wallM ?? 0;
+
+    const laborFloor = Math.round(safeArea * unit.floorPerM2);
+    const laborEdge = Math.round(safeWall * unit.edgePerM);
+
+    const materialSupport = qty ? Math.round(qty.supportFoot * unit.supportFoot) : 0;
+    const materialPlywood = qty ? Math.round(qty.plywood * unit.plywood) : 0;
+    const materialVeneer12 = qty ? Math.round(qty.veneer12 * unit.veneer12) : 0;
+
+    const total = laborFloor + laborEdge + materialSupport + materialPlywood + materialVeneer12;
+
+    const lines = [];
+    lines.push(`現場名：${(el.projectName.value || "").trim()}`);
+    lines.push(`図面：${state.pdfMeta?.name || "(Drive未保存)"} / page ${state.renderedPage}`);
+    lines.push("");
+    lines.push("【施工】");
+    lines.push(`・乾式二重床床組\t${safeArea.toFixed(3)}㎡ ＠${unit.floorPerM2}円 = ${laborFloor}円`);
+    lines.push(`・際根太\t\t${safeWall.toFixed(3)}m ＠${unit.edgePerM}円 = ${laborEdge}円`);
+    lines.push("");
+    lines.push("【材料】");
+    lines.push(`・支持脚 WP125\t${qty ? qty.supportFoot : "—"}本`);
+    lines.push(`・パーチ合板\t${qty ? qty.plywood : "—"}枚`);
+    lines.push(`・ベニヤ12mm\t${qty ? qty.veneer12 : "—"}枚`);
+    lines.push("・LVL間柱\t—束（任意）");
+    lines.push("");
+    lines.push("【合計】");
+    lines.push(`総額：${total}円`);
+
+    return { text: lines.join("\n"), total, areaM2: area, wallM, qty, unit };
+  }
+
+  function refreshEstimateUi(){
+    const est = buildEstimateText();
+    if(!est){
+      el.estimatePreview.textContent = "（まだ見積が作れません：縮尺確定→床㎡/壁mを入力）";
+      if (el.kpiArea) el.kpiArea.textContent = "—㎡";
+      if (el.kpiWall) el.kpiWall.textContent = "—m";
+      if (el.kpiArea2) el.kpiArea2.textContent = "—㎡";
+      if (el.kpiWall2) el.kpiWall2.textContent = "—m";
+      updateProgressUi();
+      if (el.estimateMiniSummaryText) {
+        el.estimateMiniSummaryText.textContent = `縮尺：${state.mmPerPx != null ? `1px=${state.mmPerPx.toFixed(4)}mm` : "未確定"} / 床：— / 壁：—`;
+      }
+      return;
+    }
+    el.estimatePreview.textContent = est.text;
+    if (el.kpiArea) el.kpiArea.textContent = (est.areaM2 != null) ? `${est.areaM2.toFixed(3)}㎡` : "—㎡";
+    if (el.kpiWall) el.kpiWall.textContent = (est.wallM != null) ? `${est.wallM.toFixed(3)}m` : "—m";
+    if (el.kpiArea2) el.kpiArea2.textContent = (est.areaM2 != null) ? `${est.areaM2.toFixed(3)}㎡` : "—㎡";
+    if (el.kpiWall2) el.kpiWall2.textContent = (est.wallM != null) ? `${est.wallM.toFixed(3)}m` : "—m";
+    if (el.estimateMiniSummaryText) {
+      const scale = (state.mmPerPx != null) ? `1px=${state.mmPerPx.toFixed(4)}mm` : "未確定";
+      const area = (est.areaM2 != null) ? `${est.areaM2.toFixed(3)}㎡` : "—";
+      const wall = (est.wallM != null) ? `${est.wallM.toFixed(3)}m` : "—";
+      el.estimateMiniSummaryText.textContent = `縮尺：${scale} / 床：${area} / 壁：${wall}`;
+    }
+    updateProgressUi();
+  }
+
+  function setStepClass(stepEl, isOn, isDone){
+    if(!stepEl) return;
+    stepEl.classList.toggle("on", !!isOn);
+    stepEl.classList.toggle("done", !!isDone);
+  }
+
+  function updateProgressUi(){
+    const hasPdf = !!state.pdfDoc;
+    const hasScale = !!state.mmPerPx;
+    const hasArea = state.polyPts.length >= 3 && hasScale;
+    const hasWall = state.wallPts.length >= 2 && hasScale;
+    const hasEstimate = (hasArea || hasWall) && hasScale;
+
+    let current = "pdf";
+    if(hasPdf && !hasScale) current = "scale";
+    else if(hasScale && !hasArea) current = "area";
+    else if(hasScale && hasArea && !hasWall) current = "wall";
+    else if(hasEstimate) current = "estimate";
+
+    setStepClass(el.stepPdf, current==="pdf", hasPdf);
+    setStepClass(el.stepScale, current==="scale", hasScale);
+    setStepClass(el.stepArea, current==="area", hasArea);
+    setStepClass(el.stepWall, current==="wall", hasWall);
+    setStepClass(el.stepEstimate, current==="estimate", hasEstimate);
+  }
+
+  function isMobileLayout(){
+    return window.matchMedia && window.matchMedia("(max-width: 1019px)").matches;
+  }
+
+  function syncScaleBlockPlacement(){
+    if(!el.scaleBlock || !el.scaleSlot || !el.scaleTopSlot) return;
+    const mobile = isMobileLayout();
+    let target = mobile ? el.scaleTopSlot : el.scaleSlot;
+    if(!mobile && pcScalePopupOpen && state.mode === "scale" && el.scalePopupSlot){
+      target = el.scalePopupSlot;
+    }
+    if(el.scaleBlock.parentElement !== target){
+      target.appendChild(el.scaleBlock);
+    }
+  }
+
+  function setPcScalePopupOpen(open){
+    pcScalePopupOpen = !!open;
+    if(el.scalePopup) el.scalePopup.classList.toggle("on", pcScalePopupOpen);
+    if(el.scalePopupBackdrop) el.scalePopupBackdrop.classList.toggle("on", pcScalePopupOpen);
+    if(el.scalePopup) el.scalePopup.setAttribute("aria-hidden", pcScalePopupOpen ? "false" : "true");
+    if(el.scalePopupBackdrop) el.scalePopupBackdrop.setAttribute("aria-hidden", pcScalePopupOpen ? "false" : "true");
+    syncScaleBlockPlacement();
+    if(pcScalePopupOpen && el.actualMm){
+      try{ el.actualMm.focus(); } catch(_) {}
+    }
+  }
+
+  function syncPdfControlsPlacement(){
+    if(!el.pdfControls || !el.pdfTopSlotBody) return;
+    if(el.pdfControls.parentElement !== el.pdfTopSlotBody){
+      el.pdfTopSlotBody.appendChild(el.pdfControls);
+    }
+  }
+
+  function refreshPdfSummaryHint(){
+    if(!el.pdfSummaryHint) return;
+    const name = state.pdfMeta?.name || (el.pdfFile && el.pdfFile.files && el.pdfFile.files[0] ? el.pdfFile.files[0].name : "");
+    const page = state.renderedPage || 1;
+    const total = state.pageCount || "?";
+    el.pdfSummaryHint.textContent = name ? `${name} / ${page}/${total}` : "未選択";
+  }
+
+  function collapsePdfControlsIfMobile(){
+    // After successful render/load, keep only the summary visible on mobile
+    if(!isMobileLayout()) return;
+    if(!state.pdfDoc) return;
+    if(!el.pdfDetails) return;
+    try{ el.pdfDetails.open = false; } catch(_) {}
+  }
+
+  function syncEstimateBodyPlacement(){
+    if(!el.estimatePanelBody || !el.estimatePanelSlot || !el.mobileEstimateSlot) return;
+    const mobile = isMobileLayout();
+    const target = mobile ? el.mobileEstimateSlot : el.estimatePanelSlot;
+    if(el.estimatePanelBody.parentElement !== target){
+      target.appendChild(el.estimatePanelBody);
+    }
+  }
+
+  function syncBasicInfoPlacement(){
+    if(!el.basicInfoBlock || !el.basicInfoHome || !el.basicInfoSlot) return;
+    const mobile = isMobileLayout();
+    const target = mobile ? el.basicInfoSlot : el.basicInfoHome;
+    if(el.basicInfoBlock.parentElement !== target){
+      target.appendChild(el.basicInfoBlock);
+    }
+  }
+
+  let mobileMinHeightPx = null;
+  function updateBarHeightVar(){
+    const root = document.documentElement;
+    const mobile = isMobileLayout();
+    if(mobile){
+      if(el.mobilePanel){
+        // Only measure when minimized (avoid huge padding when expanded)
+        if(el.mobilePanel.classList.contains("min")){
+          mobileMinHeightPx = Math.ceil(el.mobilePanel.getBoundingClientRect().height);
+        }
+        const h = (mobileMinHeightPx && Number.isFinite(mobileMinHeightPx)) ? mobileMinHeightPx : 56;
+        root.style.setProperty("--bar-h", `${h}px`);
+      }
+      return;
+    }
+    // Desktop: measure bottom bar to keep content visible even if it wraps
+    const bar = el.bottomBar || document.querySelector(".bottomBar");
+    if(bar){
+      const h = Math.ceil(bar.getBoundingClientRect().height);
+      if(Number.isFinite(h) && h > 0) root.style.setProperty("--bar-h", `${h}px`);
+    }
+  }
+
+  function setMobilePanelMinimized(min){
+    if(!el.mobilePanel) return;
+    el.mobilePanel.classList.toggle("min", !!min);
+    if (el.btnPanelMin){
+      const expanded = !min;
+      el.btnPanelMin.setAttribute("aria-expanded", String(expanded));
+      el.btnPanelMin.setAttribute("aria-label", expanded ? "パネルを閉じる" : "パネルを開く");
+      // icon only (no text)
+      el.btnPanelMin.innerHTML = expanded
+        ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 14l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    }
+    updateBarHeightVar();
+  }
+
+  function setMobilePanelOpen(open){
+    if(!el.mobilePanel) return;
+    if(!isMobileLayout()) return;
+    // open == not minimized (keep panel visible always on mobile)
+    setMobilePanelMinimized(!open);
+  }
+
+  function setMobileTab(tab){
+    // Map tab selection to actual drawing mode
+    if(tab === "area") setMode("poly");
+    else if(tab === "wall") setMode("wall");
+    const bodies = document.querySelectorAll(".mobileTabBody");
+    const tabs = document.querySelectorAll(".mobileTabs [data-mtab]");
+    for(const b of bodies){
+      b.classList.toggle("on", b.getAttribute("data-mtab-body") === tab);
+    }
+    for(const t of tabs){
+      t.classList.toggle("on", t.getAttribute("data-mtab") === tab);
+    }
+    // drawing tabs should not hide PDF: minimize after switching (keep header visible)
+    if(tab === "area" || tab === "wall"){
+      setMobilePanelMinimized(true);
+    } else {
+      setMobilePanelOpen(true);
+    }
+  }
+
   function buildStatusText(){
     const lines = [];
     if(state.pdfMeta){
@@ -441,7 +1694,11 @@
       lines.push("PDF：未アップロード（表示はOK）");
     }
     lines.push(`ページ：${state.renderedPage}/${state.pageCount || "?"}`);
-    lines.push(`モード：${state.mode === "scale" ? "スケール" : "囲い"}`);
+    lines.push(`モード：${
+      state.mode === "scale" ? "スケール" :
+      (state.mode === "poly" ? "床㎡" :
+      (state.mode === "wall" ? "壁m" : "移動"))
+    }`);
 
     if(state.pixelDist != null) lines.push(`スケール：pixel距離 = ${state.pixelDist.toFixed(2)}px`);
     if(state.mmPerPx != null) lines.push(`スケール：1px = ${state.mmPerPx.toFixed(6)}mm`);
@@ -450,6 +1707,13 @@
     const area = computeAreaM2();
     if(area != null) lines.push(`面積：${area.toFixed(3)} ㎡`);
     else lines.push("面積：未確定（囲い3点以上＋スケール確定）");
+
+    const wallM = computeWallM();
+    if(wallM != null) lines.push(`壁長さ：${wallM.toFixed(3)} m`);
+    else lines.push("壁長さ：未確定（壁mで2点以上＋スケール確定）");
+
+    lines.push(`保存：${fmtTime(state.lastSavedAt)}`);
+    lines.push(`送信：${fmtTime(state.lastSentAt)}`);
 
     return lines.join("\n");
   }
@@ -490,6 +1754,7 @@
 
       setStatus(`PDF読み込み完了：全${state.pageCount}ページ\n（iPhone対策：自動で画質を落としてでも表示します）`);
       await renderPage(page);
+      updateProgressUi();
     } catch(err){
       console.error(err);
       const msg = err && err.message ? err.message : String(err);
@@ -509,7 +1774,7 @@
 
       const viewerWidthCss = el.viewer.clientWidth;
       const base = page.getViewport({scale:1});
-      let cssScale = viewerWidthCss / base.width;
+      let cssScale = (viewerWidthCss / base.width) * (state.zoom || 1);
 
       // CSS上の見た目
       const viewportCss = page.getViewport({scale: cssScale});
@@ -534,16 +1799,53 @@
 
       const viewport = page.getViewport({scale: cssScale * dpr});
 
+      // ★キャンバスサイズが変わるので、拾い点を倍率比でスケールして維持する
+      const oldW = state.lastOverlayW ?? el.overlay.width;
+      const oldH = state.lastOverlayH ?? el.overlay.height;
+
       el.pdfCanvas.width = targetW;
       el.pdfCanvas.height = targetH;
       el.overlay.width = targetW;
-      el.overlay.height = targetH;
+      el.overlay.height = targetH
 
       // CSSサイズは固定（ズレ防止）
       el.pdfCanvas.style.width = cssW + "px";
       el.pdfCanvas.style.height = cssH + "px";
       el.overlay.style.width = cssW + "px";
       el.overlay.style.height = cssH + "px";
+      if (el.canvasWrap) {
+        el.canvasWrap.style.width = cssW + "px";
+        el.canvasWrap.style.height = cssH + "px";
+      }
+
+      // Mobile: reduce blank feel for landscape PDFs by shrinking viewer height when content is short
+      if(isMobileLayout() && el.viewer){
+        const maxH = Math.floor(window.innerHeight * 0.68);
+        const minH = 320;
+        const desired = Math.min(maxH, Math.max(minH, cssH + 16));
+        // Only shrink when the PDF is shorter than the default viewer area
+        if (cssH < maxH - 40) {
+          el.viewer.style.minHeight = desired + "px";
+        } else {
+          el.viewer.style.minHeight = "";
+        }
+      }
+
+      if(oldW > 0 && oldH > 0 && (oldW !== targetW || oldH !== targetH)){
+        const rx = targetW / oldW;
+        const ry = targetH / oldH;
+        scalePointArray(state.scalePts, rx, ry);
+        scalePointArray(state.polyPts, rx, ry);
+        scalePointArray(state.wallPts, rx, ry);
+
+        // スケール（mmPerPx）も整合させる（ズーム後も数量が変わらないように）
+        if(state.actualMm && state.scalePts.length === 2){
+          state.pixelDist = dist(state.scalePts[0], state.scalePts[1]);
+          state.mmPerPx = state.pixelDist > 0 ? (state.actualMm / state.pixelDist) : null;
+        }
+      }
+      state.lastOverlayW = targetW;
+      state.lastOverlayH = targetH;
 
       ctxPdf.setTransform(1,0,0,1,0,0);
       ctxPdf.clearRect(0,0,targetW,targetH);
@@ -553,6 +1855,9 @@
       state.renderedPage = pageNo;
       drawOverlay();
       setStatus(buildStatusText());
+      refreshEstimateUi();
+      updateProgressUi();
+      refreshPdfSummaryHint();
     } catch(err){
       console.error(err);
       const msg = err && err.message ? err.message : String(err);
@@ -578,6 +1883,11 @@
       drawPolyline(state.polyPts);
       if(state.polyPts.length >= 3) drawLine(state.polyPts[state.polyPts.length-1], state.polyPts[0], "hint");
     }
+
+    if(state.wallPts.length){
+      drawPoints(state.wallPts, "wall");
+      drawPolyline(state.wallPts, "wall");
+    }
   }
 
   function drawPoints(pts, kind){
@@ -586,7 +1896,9 @@
       ctxOv.arc(p.x, p.y, 6, 0, Math.PI*2);
       ctxOv.closePath();
       ctxOv.lineWidth = 2;
-      ctxOv.strokeStyle = (kind==="scale") ? "rgba(110,168,254,.95)" : "rgba(91,214,166,.95)";
+      if(kind==="scale") ctxOv.strokeStyle = "rgba(110,168,254,.95)";
+      else if(kind==="wall") ctxOv.strokeStyle = "rgba(255,207,90,.95)";
+      else ctxOv.strokeStyle = "rgba(91,214,166,.95)";
       ctxOv.fillStyle = "rgba(255,255,255,0)";
       ctxOv.stroke();
     }
@@ -603,13 +1915,13 @@
     ctxOv.stroke();
   }
 
-  function drawPolyline(pts){
+  function drawPolyline(pts, kind="poly"){
     if(pts.length < 2) return;
     ctxOv.beginPath();
     ctxOv.moveTo(pts[0].x, pts[0].y);
     for(let i=1;i<pts.length;i++) ctxOv.lineTo(pts[i].x, pts[i].y);
     ctxOv.lineWidth = 3;
-    ctxOv.strokeStyle = "rgba(91,214,166,.9)";
+    ctxOv.strokeStyle = (kind === "wall") ? "rgba(255,207,90,.9)" : "rgba(91,214,166,.9)";
     ctxOv.stroke();
   }
 
@@ -626,6 +1938,8 @@
     state.mmPerPx = mm / px;
 
     setStatus(buildStatusText());
+    refreshEstimateUi();
+    updateProgressUi();
   }
 
   function undo(){
@@ -634,21 +1948,28 @@
       state.actualMm = null;
       state.mmPerPx = null;
       state.pixelDist = null;
-    } else {
+    } else if(state.mode === "poly") {
       state.polyPts.pop();
+    } else {
+      state.wallPts.pop();
     }
     drawOverlay();
     setStatus(buildStatusText());
+    refreshEstimateUi();
+    updateProgressUi();
   }
 
   function clearAll(){
     state.scalePts = [];
     state.polyPts = [];
+    state.wallPts = [];
     state.actualMm = null;
     state.mmPerPx = null;
     state.pixelDist = null;
     drawOverlay();
     setStatus(buildStatusText());
+    refreshEstimateUi();
+    updateProgressUi();
   }
 
   function fileToDataUrl(file){
@@ -663,8 +1984,10 @@
   async function handlePdfFile(file){
     if(!file) return;
 
-    // ★ ファイルサイズチェック（10MB制限）
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    // ★ ファイルサイズチェック（安全側の制限）
+    // PDFはDataURL(base64)化してJSONで送るため体感 1.3〜1.5倍に増えます。
+    // 制限を緩める場合は、`gas_proxy.php` の `$MAX_BODY_BYTES` / GAS側の制限も合わせて調整してください。
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB（安全側）
     if (file.size > MAX_FILE_SIZE) {
       return alert(`ファイルサイズが大きすぎます（最大${MAX_FILE_SIZE / 1024 / 1024}MB）`);
     }
@@ -684,6 +2007,7 @@
       const bytes = await file.arrayBuffer();
       await loadPdfFromBytes(bytes);
       setStatus(buildStatusText() + "\n\n（Drive保存中…）");
+      refreshPdfSummaryHint();
     } finally {
       setLoading(false);
     }
@@ -698,20 +2022,29 @@
       });
       state.pdfMeta = meta;
       setStatus(buildStatusText());
+      refreshPdfSummaryHint();
     } catch(err){
       console.error(err);
       const msg = err && err.message ? err.message : String(err);
       setStatus(buildStatusText() + "\n\nDrive保存に失敗:\n" + msg);
+      refreshPdfSummaryHint();
     }
+
+    // Mobile: collapse PDF controls after selecting to free space
+    collapsePdfControlsIfMobile();
   }
 
-  async function saveToSheet(){
+  function buildEstimatePayload(sendEmail){
     const area = computeAreaM2();
-    if(!state.mmPerPx) return alert("スケールが未確定です（寸法線2点→mm入力→確定）");
-    if(area == null) return alert("面積が未確定です（囲い3点以上）");
+    const wallM = computeWallM();
+    const est = buildEstimateText();
+    if(!state.mmPerPx) throw new Error("スケールが未確定です（寸法線2点→mm入力→確定）");
+    if(area == null && wallM == null) throw new Error("床㎡または壁mを入力してください");
 
     const payload = {
-      projectName: el.projectName.value || "",
+      projectName: (el.projectName.value || "").trim(),
+      customerEmail: (el.customerEmail.value || "").trim(),
+      ccEmail: "", // GAS側のADMIN_EMAILを優先。必要なら将来ここに入れる
       pdfName: state.pdfMeta?.name || "(Drive未保存)",
       pdfUrl: state.pdfMeta?.url || "",
       page: state.renderedPage,
@@ -719,16 +2052,65 @@
       pixelDist: state.pixelDist,
       mmPerPx: state.mmPerPx,
       areaM2: area,
-      pointsJson: JSON.stringify({ scalePts: state.scalePts, polyPts: state.polyPts })
+      wallM: wallM,
+      pointsJson: JSON.stringify({ scalePts: state.scalePts, polyPts: state.polyPts, wallPts: state.wallPts }),
+      unitPrices: getUnitPrices(),
+      qty: est?.qty || null,
+      estimateText: est ? est.text : "",
+      total: est ? est.total : 0,
+      sendEmail: !!sendEmail,
     };
+    return payload;
+  }
 
+  async function saveToSheet(){
+    const area = computeAreaM2();
     setLoading(true);
     try{
-      await callGasApi('saveResult', { payload: payload });
-      alert(`保存しました！\n面積：${area.toFixed(3)} ㎡`);
+      saveUnitPricesToLocalStorage();
+      const payload = buildEstimatePayload(false);
+      await callGasApi('saveEstimate', { payload });
+      state.lastSavedAt = Date.now();
+      setStatus(buildStatusText());
+      if(isMobileLayout()){
+        toast("保存", `保存しました（${fmtTime(state.lastSavedAt)}）`);
+      } else {
+        if(area != null) alert(`保存しました！\n床面積：${area.toFixed(3)} ㎡`);
+        else alert("保存しました！");
+      }
     } catch(err){
       console.error(err);
+      toast("保存失敗", (err && err.message) ? err.message : String(err), "error");
       alert("保存でエラー：" + ((err && err.message) ? err.message : String(err)));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function sendEstimateEmail(){
+    const email = (el.customerEmail.value || "").trim();
+    if(!isValidEmail(email)) return alert("見積送付先メールを正しく入力してください");
+    setLoading(true);
+    try{
+      saveUnitPricesToLocalStorage();
+      const payload = buildEstimatePayload(true);
+      const res = await callGasApi('saveEstimate', { payload });
+      state.lastSentAt = Date.now();
+      setStatus(buildStatusText());
+      if(res && res.emailResult === "sent_with_bcc"){
+        if(isMobileLayout()) toast("送信", `送信しました（控えあり・${fmtTime(state.lastSentAt)}）`);
+        else alert("送信しました（控えも送信されました）。");
+      } else if (res && res.emailResult === "sent_no_admin_email") {
+        if(isMobileLayout()) toast("送信", `送信しました（控え先なし・${fmtTime(state.lastSentAt)}）`);
+        else alert("送信しました（控え先ADMIN_EMAILが未設定のため控えは送られていません）。");
+      } else {
+        if(isMobileLayout()) toast("送信", `送信しました（${fmtTime(state.lastSentAt)}）`);
+        else alert("送信しました。");
+      }
+    } catch(err){
+      console.error(err);
+      toast("送信失敗", (err && err.message) ? err.message : String(err), "error");
+      alert("送信でエラー：" + ((err && err.message) ? err.message : String(err)));
     } finally {
       setLoading(false);
     }
@@ -736,38 +2118,200 @@
 
   // Events
   el.pdfFile.addEventListener("change", e => handlePdfFile(e.target.files[0]));
-  el.btnRender.addEventListener("click", async ()=>{
-    if(!state.pdfDoc) return alert("先にPDFを選んでください");
-    const p = parseInt(el.pageNo.value || "1",10);
+  const renderFromPageInput = async ()=>{
+    if(!state.pdfDoc) return;
+    const p = clampInt(el.pageNo.value || "1", 1, state.pageCount || 9999);
     const safe = Math.min(Math.max(p,1), state.pageCount);
     el.pageNo.value = String(safe);
     await renderPage(safe);
+    collapsePdfControlsIfMobile();
+  };
+  el.pageNo.addEventListener("change", async ()=>{
+    await renderFromPageInput();
+  });
+  if(el.pageDec) el.pageDec.addEventListener("click", async ()=>{
+    const next = clampInt(el.pageNo.value || "1", 1, state.pageCount || 9999) - 1;
+    el.pageNo.value = String(Math.max(1, next));
+    await renderFromPageInput();
+  });
+  if(el.pageInc) el.pageInc.addEventListener("click", async ()=>{
+    const next = clampInt(el.pageNo.value || "1", 1, state.pageCount || 9999) + 1;
+    el.pageNo.value = String(Math.min(state.pageCount || next, next));
+    await renderFromPageInput();
+  });
+  el.btnRender.addEventListener("click", async ()=>{
+    if(!state.pdfDoc) return alert("先にPDFを選んでください");
+    await renderFromPageInput();
   });
 
-  el.btnModeScale.addEventListener("click", ()=> setMode("scale"));
+  el.btnModeScale.addEventListener("click", ()=>{
+    setMode("scale");
+    if(!isMobileLayout()) setPcScalePopupOpen(true);
+  });
   el.btnModePoly.addEventListener("click", ()=> setMode("poly"));
+  el.btnModeWall.addEventListener("click", ()=> setMode("wall"));
+  el.btnModePan.addEventListener("click", ()=> setMode("pan"));
+
+  // Mobile panel open buttons
+  const focusScaleTop = ()=>{
+    setMode("scale");
+    if (el.scaleTopSlot && el.scaleTopSlot.scrollIntoView) {
+      try { el.scaleTopSlot.scrollIntoView({behavior:"smooth", block:"start"}); } catch(_) { el.scaleTopSlot.scrollIntoView(); }
+    }
+  };
+  if (el.btnOpenScale) el.btnOpenScale.addEventListener("click", focusScaleTop);
+  if (el.btnOpenEstimate) el.btnOpenEstimate.addEventListener("click", ()=> setMobileTab("estimate"));
   el.btnApplyScale.addEventListener("click", applyScale);
   el.btnUndo.addEventListener("click", undo);
-  el.btnClear.addEventListener("click", clearAll);
+  // Reset: mobile -> long-press, desktop -> confirm dialog
+  const wireResetButton = (btn)=>{
+    if(!btn) return;
+    let timer = null;
+    let fired = false;
+    const clearTimers = ()=>{ if(timer) clearTimeout(timer); timer = null; };
+    btn.addEventListener("click", (e)=>{
+      if(isMobileLayout()){
+        e.preventDefault();
+        toast("リセット", "長押しで実行");
+        return;
+      }
+      if(confirm("リセットしますか？（拾い点・縮尺などを全て消します）")){
+        clearAll();
+        toast("リセット", "消しました");
+      }
+    });
+    btn.addEventListener("pointerdown", ()=>{
+      if(!isMobileLayout()) return;
+      fired = false;
+      toast("リセット", "1秒長押しで実行");
+      clearTimers();
+      timer = setTimeout(()=>{
+        fired = true;
+        clearAll();
+        toast("リセット", "消しました");
+      }, 1000);
+    }, {passive:true});
+    for(const ev of ["pointerup","pointercancel","pointerleave"]){
+      btn.addEventListener(ev, ()=>{ if(isMobileLayout()) clearTimers(); }, {passive:true});
+    }
+  };
+  wireResetButton(el.btnClear);
   el.btnSave.addEventListener("click", saveToSheet);
+  el.btnSend.addEventListener("click", sendEstimateEmail);
+  el.btnZoomOut.addEventListener("click", ()=> setZoom((state.zoom || 1) - 0.25));
+  el.btnZoomIn.addEventListener("click", ()=> setZoom((state.zoom || 1) + 0.25));
+  el.btnZoomReset.addEventListener("click", ()=> setZoom(1));
+  if (el.btnZoomOutM) el.btnZoomOutM.addEventListener("click", ()=> setZoom((state.zoom || 1) - 0.25));
+  if (el.btnZoomInM) el.btnZoomInM.addEventListener("click", ()=> setZoom((state.zoom || 1) + 0.25));
+  if (el.zoomLabelMWrap) el.zoomLabelMWrap.addEventListener("click", ()=> setZoom(1));
+  if (el.btnPanM) el.btnPanM.addEventListener("click", ()=> { setMode("pan"); setMobilePanelMinimized(true); });
+  if (el.btnScaleM) el.btnScaleM.addEventListener("click", focusScaleTop);
 
-  // iPhoneで二重発火しないように pointerdown だけ
+  // Mobile panel tab + buttons
+  if (el.mobilePanel){
+    el.mobilePanel.addEventListener("click", (e)=>{
+      const btn = e.target && e.target.closest ? e.target.closest("[data-mtab]") : null;
+      if(btn){
+        setMobileTab(btn.getAttribute("data-mtab"));
+      }
+    });
+  }
+  if (el.btnPanelMin) el.btnPanelMin.addEventListener("click", ()=>{
+    setMobilePanelMinimized(!el.mobilePanel.classList.contains("min"));
+  });
+  if (el.btnPanelHandle) el.btnPanelHandle.addEventListener("click", ()=>{
+    setMobilePanelMinimized(!el.mobilePanel.classList.contains("min"));
+  });
+  if (el.btnSetArea) el.btnSetArea.addEventListener("click", ()=> { setMode("poly"); setMobilePanelMinimized(true); });
+  if (el.btnSetWall) el.btnSetWall.addEventListener("click", ()=> { setMode("wall"); setMobilePanelMinimized(true); });
+  if (el.btnOpenScaleFromArea) el.btnOpenScaleFromArea.addEventListener("click", focusScaleTop);
+  if (el.btnOpenScaleFromWall) el.btnOpenScaleFromWall.addEventListener("click", focusScaleTop);
+  if (el.btnSave2) el.btnSave2.addEventListener("click", ()=> el.btnSave.click());
+  if (el.btnSend2) el.btnSend2.addEventListener("click", ()=> el.btnSend.click());
+  if (el.btnSaveM) el.btnSaveM.addEventListener("click", ()=> el.btnSave.click());
+  if (el.btnSendM) el.btnSendM.addEventListener("click", ()=> el.btnSend.click());
+  if (el.btnZoomOut2) el.btnZoomOut2.addEventListener("click", ()=> el.btnZoomOut.click());
+  if (el.btnZoomIn2) el.btnZoomIn2.addEventListener("click", ()=> el.btnZoomIn.click());
+  if (el.btnZoomReset2) el.btnZoomReset2.addEventListener("click", ()=> el.btnZoomReset.click());
+  if (el.btnUndo2) el.btnUndo2.addEventListener("click", ()=> el.btnUndo.click());
+  if (el.btnUndoM) el.btnUndoM.addEventListener("click", ()=> el.btnUndo.click());
+  // Mobile panel reset uses same behavior (long-press)
+  wireResetButton(el.btnClear2);
+
+  // unit price changes -> preview + local save
+  for(const input of [el.unitFloorPerM2, el.unitEdgePerM, el.unitSupportFoot, el.unitPlywood, el.unitVeneer12, el.unitLvl]){
+    input.addEventListener("change", ()=>{
+      saveUnitPricesToLocalStorage();
+      refreshEstimateUi();
+    });
+  }
+  el.projectName.addEventListener("input", refreshEstimateUi);
+  el.customerEmail.addEventListener("input", refreshEstimateUi);
+
+  // ===== 移動（パン）モード =====
+  const panState = {
+    active: false,
+    startX: 0,
+    startY: 0,
+    startScrollLeft: 0,
+    startScrollTop: 0,
+  };
+
+  function endPan(){
+    panState.active = false;
+  }
+
+  // iPhoneで二重発火しないように pointer 系で統一
   el.overlay.addEventListener("pointerdown", (e)=>{
     e.preventDefault();
     if(!state.pdfDoc) return;
+
+    // 移動モード：ドラッグでスクロール（パン）
+    if(state.mode === "pan"){
+      panState.active = true;
+      panState.startX = e.clientX;
+      panState.startY = e.clientY;
+      panState.startScrollLeft = el.viewer.scrollLeft;
+      panState.startScrollTop = el.viewer.scrollTop;
+      try { el.overlay.setPointerCapture(e.pointerId); } catch(_) {}
+      return;
+    }
+
     const p = getCanvasPointFromPointer(e);
 
     if(state.mode === "scale"){
       if(state.scalePts.length >= 2) state.scalePts = [];
       state.scalePts.push(p);
       if(state.scalePts.length === 2) state.pixelDist = dist(state.scalePts[0], state.scalePts[1]);
-    } else {
+    } else if(state.mode === "poly") {
       state.polyPts.push(p);
+    } else {
+      // wall
+      state.wallPts.push(p);
     }
 
     drawOverlay();
     setStatus(buildStatusText());
+    refreshEstimateUi();
   }, {passive:false});
+
+  el.overlay.addEventListener("pointermove", (e)=>{
+    if(!panState.active) return;
+    e.preventDefault();
+    const dx = e.clientX - panState.startX;
+    const dy = e.clientY - panState.startY;
+    el.viewer.scrollLeft = panState.startScrollLeft - dx;
+    el.viewer.scrollTop = panState.startScrollTop - dy;
+  }, {passive:false});
+
+  el.overlay.addEventListener("pointerup", (e)=>{
+    try { el.overlay.releasePointerCapture(e.pointerId); } catch(_) {}
+    endPan();
+  });
+  el.overlay.addEventListener("pointercancel", (e)=>{
+    try { el.overlay.releasePointerCapture(e.pointerId); } catch(_) {}
+    endPan();
+  });
 
   // 回転/サイズ変更時
   let resizeTimer = null;
@@ -777,8 +2321,45 @@
     resizeTimer = setTimeout(()=> renderPage(state.renderedPage), 250);
   });
 
+  // スマホ/PCでUIブロックを移動（UI用途のみ）
+  window.addEventListener("resize", ()=>{
+    syncPdfControlsPlacement();
+    syncScaleBlockPlacement();
+    syncEstimateBodyPlacement();
+    syncBasicInfoPlacement();
+    if (!isMobileLayout()) setMobilePanelMinimized(true);
+    updateBarHeightVar();
+  });
+
   setStatus("PDF未選択");
   setUiEnabled(false);
+  if (el.zoomLabel) el.zoomLabel.textContent = "100%";
+  if (el.zoomLabelM) el.zoomLabelM.textContent = "100%";
+  if (el.zoomLabel2) el.zoomLabel2.textContent = "100%";
+  loadUnitPricesFromLocalStorage();
+  refreshEstimateUi();
+  updateProgressUi();
+  syncPdfControlsPlacement();
+  syncScaleBlockPlacement();
+  syncEstimateBodyPlacement();
+  syncBasicInfoPlacement();
+  // mobile default: show minimal panel + default tab
+  setMobileTab("estimate");
+  setMobilePanelMinimized(true);
+  updateBarHeightVar();
+  // Mobile status gear
+  if (el.btnMobileStatus) el.btnMobileStatus.addEventListener("click", ()=> setMobileStatusOpen(true));
+  if (el.btnMobileStatusClose) el.btnMobileStatusClose.addEventListener("click", ()=> setMobileStatusOpen(false));
+  if (el.mobileStatusOverlay) el.mobileStatusOverlay.addEventListener("click", (e)=>{
+    if(e.target === el.mobileStatusOverlay) setMobileStatusOpen(false);
+  });
+
+  // PC scale popup close interactions
+  if (el.btnScalePopupClose) el.btnScalePopupClose.addEventListener("click", ()=> setPcScalePopupOpen(false));
+  if (el.scalePopupBackdrop) el.scalePopupBackdrop.addEventListener("click", ()=> setPcScalePopupOpen(false));
+  window.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape" && pcScalePopupOpen) setPcScalePopupOpen(false);
+  });
 </script>
  
 </body>
