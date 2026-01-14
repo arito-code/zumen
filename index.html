@@ -383,7 +383,7 @@
     /* Mobile: single tab panel (replaces old drawers) */
     .mobilePanel{ display:none; }
     @media(max-width:1019px){
-      :root{ --bar-h: 56px; } /* mobilePanel minimized height (also updated by JS) */
+      :root{ --bar-h: 120px; } /* mobilePanel minimized height (also updated by JS) */
       .grid{ grid-template-columns: 1fr; }
       /* hide right estimate panel on mobile (content is moved into mobilePanel by JS) */
       #estimatePanel{ display:none; }
@@ -410,11 +410,32 @@
       .mobilePanelHead{
         position:relative;
         display:flex;
-        gap:8px;
-        align-items:center;
+        flex-direction:column;
+        gap:6px;
+        align-items:stretch;
         padding:8px 10px;
         border-bottom:2px solid var(--line);
         background:linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.88));
+      }
+      /* Two fixed rows, 5 buttons each (never becomes 3 rows) */
+      .mobileHeadRow{
+        display:grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap:6px;
+        align-items:center;
+        width:100%;
+      }
+      .mobileHeadRow1{ padding-top:10px; } /* keep space for grab handle */
+      .mobilePanelHead .tab.mini{
+        width:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        text-align:center;
+      }
+      .mobilePanelHead .tab.mini.iconOnly{
+        width:100%;
+        padding:8px;
       }
       /* grab handle (tap target) */
       .panelHandle{
@@ -440,19 +461,11 @@
         border-radius:999px;
         background:rgba(82,96,122,.28);
       }
-      .mobileTabs{ display:flex; gap:6px; flex-wrap:wrap; }
       .tab.mini{
         padding:8px 10px;
         min-height:38px;
         font-size:13px;
         border-radius:12px;
-      }
-      .tab.mini.iconOnly{
-        width:44px;
-        padding:8px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
       }
       .tab.mini.iconOnly svg{ width:18px; height:18px; display:block; }
 
@@ -468,7 +481,7 @@
     }
 
     /* Minimized state: show only header */
-    .mobilePanel.min{ max-height: 56px; }
+    .mobilePanel.min{ max-height: 120px; }
     .mobilePanel.min .mobilePanelBody{ display:none; }
 
     /* Desktop: hide mobile open buttons */
@@ -916,9 +929,8 @@
           <!-- Mobile: email/project inputs under PDF -->
           <div id="basicInfoSlot" class="mobileOnly" style="margin-top:10px;"></div>
 
-          <!-- Mobile: always-visible save/send under PDF -->
+          <!-- Mobile: always-visible send under PDF -->
           <div class="row mobileOnly" id="mobileSaveSendRow" style="margin-top:10px;">
-            <button class="btn btnMint" type="button" id="btnSaveM" disabled>保存</button>
             <button class="btn btnPeach" type="button" id="btnSendM" disabled>送信</button>
           </div>
 
@@ -1025,7 +1037,6 @@
     <div class="actions">
       <button class="tab" id="btnUndo">戻す</button>
       <button class="tab" id="btnClear">リセット</button>
-      <button class="tab" id="btnSave" disabled style="background:rgba(191,238,226,.85);">保存</button>
       <button class="tab" id="btnSend" disabled style="background:rgba(255,217,201,.85);">送信</button>
     </div>
   </div>
@@ -1046,20 +1057,31 @@
   <div class="mobilePanel" id="mobilePanel" aria-label="スマホ操作パネル">
     <div class="mobilePanelHead">
       <button class="panelHandle" type="button" id="btnPanelHandle" aria-label="パネルを開閉"></button>
-      <div class="mobileTabs" role="tablist" aria-label="操作タブ">
+      <!-- Row 1: +, -, 現尺, 戻る, 移動 -->
+      <div class="mobileHeadRow mobileHeadRow1" aria-label="クイック操作">
+        <button class="tab mini iconOnly" type="button" id="btnZoomInH" aria-label="ズームイン" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button class="tab mini iconOnly" type="button" id="btnZoomOutH" aria-label="ズームアウト" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button class="tab mini" type="button" id="btnZoomResetH" aria-label="現尺" disabled>現尺</button>
+        <button class="tab mini iconOnly" type="button" id="btnUndoH" aria-label="戻る">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 7H5v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 11c2-3 5-5 9-5 4.5 0 8 3.5 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button class="tab mini" type="button" id="btnPanH">移動</button>
+      </div>
+
+      <!-- Row 2: SC, 床, 壁, 見積, 送信 -->
+      <div class="mobileHeadRow mobileHeadRow2" aria-label="操作タブ">
+        <button class="tab mini" type="button" id="btnScaleH" aria-label="SC" disabled>SC</button>
         <button class="tab mini on" type="button" data-mtab="area">床㎡</button>
         <button class="tab mini" type="button" data-mtab="wall">壁m</button>
         <button class="tab mini" type="button" data-mtab="estimate">見積</button>
+        <button class="tab mini" type="button" id="btnSendH" disabled style="background:rgba(255,217,201,.85);">送信</button>
       </div>
-      <button class="tab mini iconOnly" type="button" id="btnPanelMin" aria-label="パネルを閉じる" aria-expanded="true"></button>
     </div>
     <div class="mobilePanelBody">
-      <div class="mobileCommon">
-        <div class="row">
-          <button class="btn btnLav" type="button" id="btnUndo2">戻す</button>
-          <button class="btn btnPeach" type="button" id="btnClear2">リセット</button>
-        </div>
-      </div>
 
       <div class="mobileTabBody" data-mtab-body="area">
         <div class="hint">
@@ -1085,6 +1107,10 @@
 
       <div class="mobileTabBody" data-mtab-body="estimate">
         <div id="mobileEstimateSlot"></div>
+        <div id="mobileEstimateBottomSlot" style="margin-top:12px;"></div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btnPeach" type="button" id="btnSendEstimateBottom" disabled>送信</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1152,6 +1178,13 @@
     btnZoomOutM: document.getElementById("btnZoomOutM"),
     btnZoomInM: document.getElementById("btnZoomInM"),
     btnZoomResetM: document.getElementById("btnZoomResetM"),
+    btnZoomOutH: document.getElementById("btnZoomOutH"),
+    btnZoomInH: document.getElementById("btnZoomInH"),
+    btnScaleH: document.getElementById("btnScaleH"),
+    btnZoomResetH: document.getElementById("btnZoomResetH"),
+    btnUndoH: document.getElementById("btnUndoH"),
+    btnPanH: document.getElementById("btnPanH"),
+    btnSendH: document.getElementById("btnSendH"),
     zoomLabelM: document.getElementById("zoomLabelM"),
     zoomLabelMWrap: document.getElementById("zoomLabelMWrap"),
     btnPanM: document.getElementById("btnPanM"),
@@ -1176,38 +1209,29 @@
     estimatePanelSlot: document.getElementById("estimatePanelSlot"),
     estimatePanelBody: document.getElementById("estimatePanelBody"),
     mobileEstimateSlot: document.getElementById("mobileEstimateSlot"),
+    mobileEstimateBottomSlot: document.getElementById("mobileEstimateBottomSlot"),
+    btnSendEstimateBottom: document.getElementById("btnSendEstimateBottom"),
     estimateMiniSummaryText: document.getElementById("estimateMiniSummaryText"),
     basicInfoHome: document.getElementById("basicInfoHome"),
     basicInfoBlock: document.getElementById("basicInfoBlock"),
     basicInfoSlot: document.getElementById("basicInfoSlot"),
     mobilePanel: document.getElementById("mobilePanel"),
     bottomBar: document.querySelector(".bottomBar"),
-    btnPanelMin: document.getElementById("btnPanelMin"),
     btnPanelHandle: document.getElementById("btnPanelHandle"),
     status2: document.getElementById("status2"),
     kpiArea2: document.getElementById("kpiArea2"),
     kpiWall2: document.getElementById("kpiWall2"),
-    btnSetPan: document.getElementById("btnSetPan"),
     btnSetArea: document.getElementById("btnSetArea"),
     btnSetWall: document.getElementById("btnSetWall"),
     btnOpenScaleFromArea: document.getElementById("btnOpenScaleFromArea"),
     btnOpenScaleFromWall: document.getElementById("btnOpenScaleFromWall"),
-    btnSave2: document.getElementById("btnSave2"),
     btnSend2: document.getElementById("btnSend2"),
-    btnSaveM: document.getElementById("btnSaveM"),
     btnSendM: document.getElementById("btnSendM"),
-    btnZoomOut2: document.getElementById("btnZoomOut2"),
-    btnZoomIn2: document.getElementById("btnZoomIn2"),
-    btnZoomReset2: document.getElementById("btnZoomReset2"),
-    zoomLabel2: document.getElementById("zoomLabel2"),
-    btnUndo2: document.getElementById("btnUndo2"),
-    btnClear2: document.getElementById("btnClear2"),
     btnUndoM: document.getElementById("btnUndoM"),
     actualMm: document.getElementById("actualMm"),
     btnApplyScale: document.getElementById("btnApplyScale"),
     btnUndo: document.getElementById("btnUndo"),
     btnClear: document.getElementById("btnClear"),
-    btnSave: document.getElementById("btnSave"),
     btnSend: document.getElementById("btnSend"),
     scalePopupBackdrop: document.getElementById("scalePopupBackdrop"),
     scalePopup: document.getElementById("scalePopup"),
@@ -1316,19 +1340,20 @@
   function setUiEnabled(ready){
     el.btnRender.disabled = !ready;
     el.btnApplyScale.disabled = !ready;
-    el.btnSave.disabled = !ready;
     el.btnSend.disabled = !ready;
-    if (el.btnSaveM) el.btnSaveM.disabled = !ready;
     if (el.btnSendM) el.btnSendM.disabled = !ready;
+    if (el.btnSendH) el.btnSendH.disabled = !ready;
+    if (el.btnSendEstimateBottom) el.btnSendEstimateBottom.disabled = !ready;
     el.btnZoomOut.disabled = !ready;
     el.btnZoomIn.disabled = !ready;
     el.btnZoomReset.disabled = !ready;
     if (el.btnZoomOutM) el.btnZoomOutM.disabled = !ready;
     if (el.btnZoomInM) el.btnZoomInM.disabled = !ready;
     if (el.btnZoomResetM) el.btnZoomResetM.disabled = !ready;
-    if (el.btnZoomOut2) el.btnZoomOut2.disabled = !ready;
-    if (el.btnZoomIn2) el.btnZoomIn2.disabled = !ready;
-    if (el.btnZoomReset2) el.btnZoomReset2.disabled = !ready;
+    if (el.btnZoomOutH) el.btnZoomOutH.disabled = !ready;
+    if (el.btnZoomInH) el.btnZoomInH.disabled = !ready;
+    if (el.btnScaleH) el.btnScaleH.disabled = !ready;
+    if (el.btnZoomResetH) el.btnZoomResetH.disabled = !ready;
   }
 
   function clamp(n, min, max){ return Math.min(max, Math.max(min, n)); }
@@ -1612,8 +1637,9 @@
   }
 
   function syncBasicInfoPlacement(){
-    if(!el.basicInfoBlock || !el.basicInfoHome || !el.basicInfoSlot) return;
+    if(!el.basicInfoBlock || !el.basicInfoHome) return;
     const mobile = isMobileLayout();
+    // Mobile: 固定ページ部（KPIの下〜送信ボタンの上）に表示する
     const target = mobile ? el.basicInfoSlot : el.basicInfoHome;
     if(el.basicInfoBlock.parentElement !== target){
       target.appendChild(el.basicInfoBlock);
@@ -1630,7 +1656,7 @@
         if(el.mobilePanel.classList.contains("min")){
           mobileMinHeightPx = Math.ceil(el.mobilePanel.getBoundingClientRect().height);
         }
-        const h = (mobileMinHeightPx && Number.isFinite(mobileMinHeightPx)) ? mobileMinHeightPx : 56;
+        const h = (mobileMinHeightPx && Number.isFinite(mobileMinHeightPx)) ? mobileMinHeightPx : 120;
         root.style.setProperty("--bar-h", `${h}px`);
       }
       return;
@@ -1646,15 +1672,6 @@
   function setMobilePanelMinimized(min){
     if(!el.mobilePanel) return;
     el.mobilePanel.classList.toggle("min", !!min);
-    if (el.btnPanelMin){
-      const expanded = !min;
-      el.btnPanelMin.setAttribute("aria-expanded", String(expanded));
-      el.btnPanelMin.setAttribute("aria-label", expanded ? "パネルを閉じる" : "パネルを開く");
-      // icon only (no text)
-      el.btnPanelMin.innerHTML = expanded
-        ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 14l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-        : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    }
     updateBarHeightVar();
   }
 
@@ -1670,7 +1687,7 @@
     if(tab === "area") setMode("poly");
     else if(tab === "wall") setMode("wall");
     const bodies = document.querySelectorAll(".mobileTabBody");
-    const tabs = document.querySelectorAll(".mobileTabs [data-mtab]");
+    const tabs = document.querySelectorAll(".mobilePanelHead [data-mtab]");
     for(const b of bodies){
       b.classList.toggle("on", b.getAttribute("data-mtab-body") === tab);
     }
@@ -2063,30 +2080,6 @@
     return payload;
   }
 
-  async function saveToSheet(){
-    const area = computeAreaM2();
-    setLoading(true);
-    try{
-      saveUnitPricesToLocalStorage();
-      const payload = buildEstimatePayload(false);
-      await callGasApi('saveEstimate', { payload });
-      state.lastSavedAt = Date.now();
-      setStatus(buildStatusText());
-      if(isMobileLayout()){
-        toast("保存", `保存しました（${fmtTime(state.lastSavedAt)}）`);
-      } else {
-        if(area != null) alert(`保存しました！\n床面積：${area.toFixed(3)} ㎡`);
-        else alert("保存しました！");
-      }
-    } catch(err){
-      console.error(err);
-      toast("保存失敗", (err && err.message) ? err.message : String(err), "error");
-      alert("保存でエラー：" + ((err && err.message) ? err.message : String(err)));
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function sendEstimateEmail(){
     const email = (el.customerEmail.value || "").trim();
     if(!isValidEmail(email)) return alert("見積送付先メールを正しく入力してください");
@@ -2095,17 +2088,20 @@
       saveUnitPricesToLocalStorage();
       const payload = buildEstimatePayload(true);
       const res = await callGasApi('saveEstimate', { payload });
-      state.lastSentAt = Date.now();
-      setStatus(buildStatusText());
-      if(res && res.emailResult === "sent_with_bcc"){
-        if(isMobileLayout()) toast("送信", `送信しました（控えあり・${fmtTime(state.lastSentAt)}）`);
-        else alert("送信しました（控えも送信されました）。");
-      } else if (res && res.emailResult === "sent_no_admin_email") {
-        if(isMobileLayout()) toast("送信", `送信しました（控え先なし・${fmtTime(state.lastSentAt)}）`);
-        else alert("送信しました（控え先ADMIN_EMAILが未設定のため控えは送られていません）。");
-      } else {
+      const emailResult = res && typeof res.emailResult === "string" ? res.emailResult : "";
+
+      // 成功系のみ「送信しました」扱いにする
+      if(emailResult === "sent_with_bcc" || emailResult === "sent_no_admin_email"){
+        state.lastSentAt = Date.now();
+        setStatus(buildStatusText());
+        // BCC有無はユーザー表示に出さない（控え文言は表示しない）
         if(isMobileLayout()) toast("送信", `送信しました（${fmtTime(state.lastSentAt)}）`);
         else alert("送信しました。");
+      } else if (emailResult && emailResult.startsWith("send_failed:")) {
+        // 互換性のため（GAS側で success:false に変わっていても、万一ここに来たら失敗扱い）
+        throw new Error(emailResult);
+      } else {
+        throw new Error(emailResult ? `Unexpected emailResult: ${emailResult}` : "Unexpected response from server.");
       }
     } catch(err){
       console.error(err);
@@ -2196,7 +2192,6 @@
     }
   };
   wireResetButton(el.btnClear);
-  el.btnSave.addEventListener("click", saveToSheet);
   el.btnSend.addEventListener("click", sendEstimateEmail);
   el.btnZoomOut.addEventListener("click", ()=> setZoom((state.zoom || 1) - 0.25));
   el.btnZoomIn.addEventListener("click", ()=> setZoom((state.zoom || 1) + 0.25));
@@ -2206,6 +2201,13 @@
   if (el.zoomLabelMWrap) el.zoomLabelMWrap.addEventListener("click", ()=> setZoom(1));
   if (el.btnPanM) el.btnPanM.addEventListener("click", ()=> { setMode("pan"); setMobilePanelMinimized(true); });
   if (el.btnScaleM) el.btnScaleM.addEventListener("click", focusScaleTop);
+  if (el.btnZoomOutH) el.btnZoomOutH.addEventListener("click", ()=> setZoom((state.zoom || 1) - 0.25));
+  if (el.btnZoomInH) el.btnZoomInH.addEventListener("click", ()=> setZoom((state.zoom || 1) + 0.25));
+  if (el.btnScaleH) el.btnScaleH.addEventListener("click", ()=> { focusScaleTop(); setMobilePanelMinimized(true); });
+  if (el.btnZoomResetH) el.btnZoomResetH.addEventListener("click", ()=> setZoom(1));
+  if (el.btnUndoH) el.btnUndoH.addEventListener("click", ()=> el.btnUndo.click());
+  if (el.btnPanH) el.btnPanH.addEventListener("click", ()=> { setMode("pan"); setMobilePanelMinimized(true); });
+  if (el.btnSendH) el.btnSendH.addEventListener("click", ()=> { el.btnSend.click(); setMobilePanelMinimized(true); });
 
   // Mobile panel tab + buttons
   if (el.mobilePanel){
@@ -2216,9 +2218,6 @@
       }
     });
   }
-  if (el.btnPanelMin) el.btnPanelMin.addEventListener("click", ()=>{
-    setMobilePanelMinimized(!el.mobilePanel.classList.contains("min"));
-  });
   if (el.btnPanelHandle) el.btnPanelHandle.addEventListener("click", ()=>{
     setMobilePanelMinimized(!el.mobilePanel.classList.contains("min"));
   });
@@ -2226,17 +2225,10 @@
   if (el.btnSetWall) el.btnSetWall.addEventListener("click", ()=> { setMode("wall"); setMobilePanelMinimized(true); });
   if (el.btnOpenScaleFromArea) el.btnOpenScaleFromArea.addEventListener("click", focusScaleTop);
   if (el.btnOpenScaleFromWall) el.btnOpenScaleFromWall.addEventListener("click", focusScaleTop);
-  if (el.btnSave2) el.btnSave2.addEventListener("click", ()=> el.btnSave.click());
   if (el.btnSend2) el.btnSend2.addEventListener("click", ()=> el.btnSend.click());
-  if (el.btnSaveM) el.btnSaveM.addEventListener("click", ()=> el.btnSave.click());
   if (el.btnSendM) el.btnSendM.addEventListener("click", ()=> el.btnSend.click());
-  if (el.btnZoomOut2) el.btnZoomOut2.addEventListener("click", ()=> el.btnZoomOut.click());
-  if (el.btnZoomIn2) el.btnZoomIn2.addEventListener("click", ()=> el.btnZoomIn.click());
-  if (el.btnZoomReset2) el.btnZoomReset2.addEventListener("click", ()=> el.btnZoomReset.click());
-  if (el.btnUndo2) el.btnUndo2.addEventListener("click", ()=> el.btnUndo.click());
   if (el.btnUndoM) el.btnUndoM.addEventListener("click", ()=> el.btnUndo.click());
-  // Mobile panel reset uses same behavior (long-press)
-  wireResetButton(el.btnClear2);
+  if (el.btnSendEstimateBottom) el.btnSendEstimateBottom.addEventListener("click", ()=> el.btnSend.click());
 
   // unit price changes -> preview + local save
   for(const input of [el.unitFloorPerM2, el.unitEdgePerM, el.unitSupportFoot, el.unitPlywood, el.unitVeneer12, el.unitLvl]){

@@ -27,6 +27,22 @@ function doGet() {
 }
 
 /**
+ * Gmail権限（送信系スコープ）を承認するための補助関数。
+ * Apps Scriptエディタ上で一度だけ実行し、権限承認を完了させてください。
+ * ※ Webアプリが「実行するユーザー: 自分」の場合、オーナーの承認が必要です。
+ */
+function authorizeGmail() {
+  // GmailApp を参照することで、必要なスコープの承認フローを発生させる
+  const aliases = GmailApp.getAliases();
+  const effective = (Session.getEffectiveUser && Session.getEffectiveUser().getEmail) ? (Session.getEffectiveUser().getEmail() || "") : "";
+  return {
+    ok: true,
+    effectiveUser: effective,
+    aliasesCount: Array.isArray(aliases) ? aliases.length : 0,
+  };
+}
+
+/**
  * CORS対応とエラーハンドリングの統一
  */
 function sendResponse(data, statusCode = 200) {
@@ -197,6 +213,7 @@ function saveEstimate(payload) {
   }
 
   let emailResult = "skipped";
+  let emailSendFailed = false;
   if (sendEmail) {
     const subject = `【見積】${payload.projectName ? payload.projectName : "乾式二重床"}（自動作成）`;
     const body = payload.estimateText || "見積内容が空です。";
@@ -208,6 +225,7 @@ function saveEstimate(payload) {
       emailResult = bcc ? "sent_with_bcc" : "sent_no_admin_email";
     } catch (e) {
       emailResult = "send_failed: " + (e.message || String(e));
+      emailSendFailed = true;
       console.error("メール送信に失敗:", e);
     }
   }
@@ -218,6 +236,11 @@ function saveEstimate(payload) {
     sheet.getRange(lastRow, 16).setValue(emailResult);
   } catch (e) {
     console.error("emailResultの更新に失敗:", e);
+  }
+
+  // 送信に失敗した場合は「成功」として返さない（フロント側に失敗を伝える）
+  if (sendEmail && emailSendFailed) {
+    throw new Error(emailResult);
   }
 
   return { ok: true, emailResult };
