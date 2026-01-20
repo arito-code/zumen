@@ -11,6 +11,7 @@ function getConfig() {
     SPREADSHEET_ID: props.getProperty('SPREADSHEET_ID') || "1dygMoihb3Xe2ps_2fMauZ2RjdlIl1DLOoQ671fzxm2Y",
     SHEET_NAME: props.getProperty('SHEET_NAME') || "面積計算ログ",
     ESTIMATE_SHEET_NAME: props.getProperty('ESTIMATE_SHEET_NAME') || "見積ログ",
+    ESTIMATE_ITEMS_SHEET_NAME: props.getProperty('ESTIMATE_ITEMS_SHEET_NAME') || "見積明細",
     DRIVE_FOLDER_ID: props.getProperty('DRIVE_FOLDER_ID') || "1l_NBxyuxFQVwSaAI5ZTR_Ad8Esn5HUhI",
     API_KEY: props.getProperty('API_KEY') || "", // セキュリティ対策（オプション）
     ADMIN_EMAIL: props.getProperty('ADMIN_EMAIL') || "info@g-knowthyself.com", // 見積控え送付先（任意）
@@ -179,13 +180,47 @@ function saveEstimate(payload) {
     throw new Error(`シートヘッダー（見積）の設定に失敗しました: ${e.message || String(e)}`);
   }
 
+  // 明細シート（行=1アイテム）
+  let itemsSheet;
+  try {
+    itemsSheet = getOrCreateSheet_(ss, CONFIG.ESTIMATE_ITEMS_SHEET_NAME);
+    ensureHeaderEstimateItems_(itemsSheet);
+  } catch (e) {
+    throw new Error(`明細シート「${CONFIG.ESTIMATE_ITEMS_SHEET_NAME}」の作成/取得に失敗しました: ${e.message || String(e)}`);
+  }
+
   const now = new Date();
   const ts = Utilities.formatDate(now, "Asia/Tokyo", "yyyy-MM-dd HH:mm:ss");
 
-  const unitPricesJson = payload.unitPrices ? JSON.stringify(payload.unitPrices) : "";
-  const qtySupport = payload.qty?.supportFoot ?? payload.autoQty?.supportFoot ?? payload.supportFoot ?? "";
-  const qtyPlywood = payload.qty?.plywood ?? payload.autoQty?.plywood ?? payload.plywood ?? "";
-  const qtyVeneer12 = payload.qty?.veneer12 ?? payload.autoQty?.veneer12 ?? payload.veneer12 ?? "";
+  const estimateId = (payload.clientEstimateId || "").trim() || Utilities.getUuid();
+  const floors = Array.isArray(payload.floorItems) ? payload.floorItems : [];
+  const walls = Array.isArray(payload.wallItems) ? payload.wallItems : [];
+
+  // スクショ（dataUrl）→ Drive保存（PRIVATE + viewer限定）→ URL
+  let screenshotUrl = "";
+  const screenshotDataUrl = payload.screenshotDataUrl || "";
+  if (screenshotDataUrl) {
+    const fileMeta = saveScreenshotToDrive_(screenshotDataUrl, {
+      folderId: CONFIG.DRIVE_FOLDER_ID,
+      estimateId,
+      ts,
+      customerEmail,
+      adminEmail: (CONFIG.ADMIN_EMAIL || "").trim(),
+    });
+    screenshotUrl = fileMeta.url || "";
+  }
+
+  // ヘッダ側には合計数量だけ残す（詳細は明細シートへ）
+  let qtySupport = 0, qtyPlywood = 0, qtyVeneer12 = 0;
+  for (const f of floors) {
+    const q = f && f.qty ? f.qty : null;
+    if (q) {
+      qtySupport += Number(q.supportFoot || 0) || 0;
+      qtyPlywood += Number(q.plywood || 0) || 0;
+      qtyVeneer12 += Number(q.veneer12 || 0) || 0;
+    }
+  }
+  const unitPricesJson = ""; // 箇所別単価は明細側に保存（ヘッダ側は空でOK）
 
   const row = [
     ts,
@@ -196,14 +231,18 @@ function saveEstimate(payload) {
     payload.page ?? "",
     payload.areaM2 ?? "",
     payload.wallM ?? "",
-    qtySupport,
-    qtyPlywood,
-    qtyVeneer12,
+    qtySupport || "",
+    qtyPlywood || "",
+    qtyVeneer12 || "",
     unitPricesJson,
     payload.total ?? "",
-    payload.estimateText || "",
+    buildEstimateTextWithScreenshotUrl_(payload.estimateText || "", screenshotUrl),
     sendEmail ? "1" : "0",
     "", // emailResult
+    estimateId,
+    String(floors.length),
+    String(walls.length),
+    screenshotUrl,
   ];
 
   try {
@@ -212,11 +251,59 @@ function saveEstimate(payload) {
     throw new Error(`スプレッドシートへの保存に失敗しました: ${e.message || String(e)}`);
   }
 
+  // 明細行を保存（最大: 床20 + 壁20）
+  try {
+    const detailRows = [];
+    for (const f of floors) {
+      const idx = f && f.index != null ? f.index : "";
+      const a = f && f.areaM2 != null ? f.areaM2 : "";
+      const u = f && f.unitPrices ? f.unitPrices : null;
+      const q = f && f.qty ? f.qty : null;
+      detailRows.push([
+        ts,
+        estimateId,
+        "floor",
+        idx,
+        a,
+        u ? JSON.stringify(u) : "",
+        q ? JSON.stringify(q) : "",
+        f && f.laborYen != null ? f.laborYen : "",
+        f && f.materialYen != null ? f.materialYen : "",
+        f && f.subtotalYen != null ? f.subtotalYen : "",
+        f && f.pts ? JSON.stringify(f.pts) : "",
+      ]);
+    }
+    for (const w of walls) {
+      const idx = w && w.index != null ? w.index : "";
+      const m = w && w.wallM != null ? w.wallM : "";
+      const u = w && w.unitPrices ? w.unitPrices : null;
+      detailRows.push([
+        ts,
+        estimateId,
+        "wall",
+        idx,
+        m,
+        u ? JSON.stringify(u) : "",
+        "", // qty_json (wall has none)
+        w && w.laborYen != null ? w.laborYen : "",
+        "", // material_yen (wall has none)
+        w && w.subtotalYen != null ? w.subtotalYen : "",
+        w && w.pts ? JSON.stringify(w.pts) : "",
+      ]);
+    }
+    if (detailRows.length) {
+      const start = itemsSheet.getLastRow() + 1;
+      itemsSheet.getRange(start, 1, detailRows.length, detailRows[0].length).setValues(detailRows);
+    }
+  } catch (e) {
+    throw new Error(`明細シートへの保存に失敗しました: ${e.message || String(e)}`);
+  }
+
   let emailResult = "skipped";
   let emailSendFailed = false;
   if (sendEmail) {
     const subject = `【見積】${payload.projectName ? payload.projectName : "乾式二重床"}（自動作成）`;
-    const body = payload.estimateText || "見積内容が空です。";
+    const body = buildEstimateTextWithScreenshotUrl_(payload.estimateText || "", screenshotUrl) || "見積内容が空です。";
     const bcc = (CONFIG.ADMIN_EMAIL || "").trim();
     try {
       const options = {};
@@ -243,7 +330,81 @@ function saveEstimate(payload) {
     throw new Error(emailResult);
   }
 
-  return { ok: true, emailResult };
+  return { ok: true, emailResult, screenshotUrl };
+}
+
+function buildEstimateTextWithScreenshotUrl_(estimateText, screenshotUrl) {
+  const base = (estimateText || "").trim();
+  if (!screenshotUrl) return base;
+  // already included?
+  if (base.includes(screenshotUrl)) return base;
+  const lines = [];
+  if (base) lines.push(base);
+  lines.push("");
+  lines.push(`スクショ：${screenshotUrl}`);
+  return lines.join("\n");
+}
+
+function saveScreenshotToDrive_(dataUrl, opts) {
+  const folderId = opts && opts.folderId ? String(opts.folderId) : "";
+  if (!folderId) throw new Error("DriveフォルダIDが設定されていません（スクショ保存用）。");
+
+  const customerEmail = (opts && opts.customerEmail ? String(opts.customerEmail) : "").trim();
+  const adminEmail = (opts && opts.adminEmail ? String(opts.adminEmail) : "").trim();
+  const estimateId = (opts && opts.estimateId ? String(opts.estimateId) : "").trim() || Utilities.getUuid();
+  const ts = (opts && opts.ts ? String(opts.ts) : "").trim() || Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd HH:mm:ss");
+
+  let folder;
+  try {
+    folder = DriveApp.getFolderById(folderId);
+  } catch (e) {
+    throw new Error(`Driveフォルダにアクセスできません（ID: ${folderId}）。エラー: ${e.message || String(e)}`);
+  }
+
+  // Parse dataURL (data:image/jpeg;base64,...)
+  let base64 = "";
+  let mimeType = "image/jpeg";
+  try {
+    const m = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+    if (!m) throw new Error("dataURL形式が不正です");
+    mimeType = m[1] || "image/jpeg";
+    base64 = m[2] || "";
+  } catch (e) {
+    throw new Error(`スクショdataURLの解析に失敗しました: ${e.message || String(e)}`);
+  }
+
+  let blob;
+  try {
+    const bytes = Utilities.base64Decode(base64);
+    const safeTs = ts.replace(/[:\\s]/g, "-");
+    const name = `SS_${estimateId}_${safeTs}.jpg`;
+    blob = Utilities.newBlob(bytes, mimeType, name);
+  } catch (e) {
+    throw new Error(`スクショのデコードに失敗しました: ${e.message || String(e)}`);
+  }
+
+  let file;
+  try {
+    file = folder.createFile(blob);
+  } catch (e) {
+    throw new Error(`スクショをDriveに保存できませんでした: ${e.message || String(e)}`);
+  }
+
+  // Sharing: anyone with link can view (Googleアカウント無しでも閲覧できる運用)
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {
+    // continue, but warn in logs
+    console.error("スクショの共有設定（ANYONE_WITH_LINK）に失敗:", e.message || String(e));
+  }
+
+  // 共有リンク閲覧可のため必須ではないが、管理者がDrive上で探しやすいように一応付与（失敗しても致命ではない）
+  try { if (adminEmail) file.addViewer(adminEmail); } catch (e) { console.error("管理者viewer付与に失敗:", e.message || String(e)); }
+  try { if (customerEmail) file.addViewer(customerEmail); } catch (e) { console.error("送付先viewer付与に失敗:", e.message || String(e)); }
+
+  const fileId = file.getId();
+  const url = `https://drive.google.com/file/d/${fileId}/view`;
+  return { fileId, url };
 }
 
 function uploadPdf(dataUrl, filename, mimeType) {
@@ -460,6 +621,10 @@ function ensureHeaderEstimate_(sheet) {
     "estimateText",
     "sendEmail",
     "emailResult",
+    "clientEstimateId",
+    "floorCount",
+    "wallCount",
+    "screenshotUrl",
   ];
 
   if (sheet.getLastRow() === 0) {
@@ -468,5 +633,34 @@ function ensureHeaderEstimate_(sheet) {
     return;
   }
 
-  // 既存ヘッダーが違う場合でも、最小限で壊さない（追記はしない）
+  // 既存ヘッダーが短い場合のみ末尾に追記（壊さない）
+  try {
+    const existing = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const lastVal = existing[existing.length - 1];
+    if (existing.length < header.length && lastVal !== "screenshotUrl") {
+      sheet.getRange(1, existing.length + 1, 1, header.length - existing.length).setValues([header.slice(existing.length)]);
+    }
+  } catch (e) {
+    console.error("見積ヘッダー更新（追記）に失敗:", e.message || String(e));
+  }
+}
+
+function ensureHeaderEstimateItems_(sheet) {
+  const header = [
+    "timestamp",
+    "estimateId",
+    "type",
+    "index",
+    "measureValue",
+    "unitPrices_json",
+    "qty_json",
+    "labor_yen",
+    "material_yen",
+    "subtotal_yen",
+    "pts_json",
+  ];
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+    sheet.setFrozenRows(1);
+  }
 }

@@ -656,6 +656,86 @@
       .scalePopupBody input[type="number"]{ font-size:16px; padding:12px 10px; }
       .scalePopupBody .btn{ min-height:48px; padding:12px 12px; font-size:16px; }
     }
+
+    /* Price popup (per-item) */
+    .pricePopupBackdrop{
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.18);
+      z-index:62;
+    }
+    .pricePopupBackdrop.on{ display:block; }
+    .pricePopup{
+      display:none;
+      position:fixed;
+      left:12px; right:12px;
+      top:12px;
+      bottom: calc(12px + var(--safe-b));
+      max-width:1200px;
+      margin:0 auto;
+      background:rgba(255,255,255,.99);
+      border:2px solid var(--line);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+      z-index:63;
+      overflow:hidden;
+    }
+    .pricePopup.on{ display:block; }
+    .pricePopupHead{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding:10px 12px;
+      border-bottom:2px solid var(--line);
+      font-weight:900;
+    }
+    .pricePopupBody{
+      padding:10px 12px;
+      overflow:auto;
+      max-height: calc(100dvh - 140px);
+      -webkit-overflow-scrolling: touch;
+    }
+    .priceTable{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      overflow:hidden;
+      border:2px solid var(--line);
+      border-radius:14px;
+      background:rgba(255,255,255,.9);
+    }
+    .priceTable th,
+    .priceTable td{
+      padding:10px 10px;
+      border-bottom:1px solid rgba(82,96,122,.18);
+      font-size:13px;
+      vertical-align:middle;
+    }
+    .priceTable th{
+      background:rgba(207,232,255,.45);
+      font-weight:900;
+      position:sticky;
+      top:0;
+      z-index:1;
+    }
+    .priceTable tr:last-child td{ border-bottom:0; }
+    .priceTable input[type="number"]{
+      width:100%;
+      min-width:92px;
+      padding:10px 10px;
+      border:2px solid rgba(82,96,122,.25);
+      border-radius:12px;
+      font-weight:900;
+      background:rgba(255,255,255,.95);
+    }
+    .priceFooter{
+      position:sticky;
+      bottom:0;
+      background:linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.98));
+      padding:10px 0 0;
+    }
+    .priceFooter .row{ margin-top:0; }
   </style>
 
   <script>
@@ -1004,6 +1084,9 @@
           <div class="section">
             <div class="sectionTitle">見積プレビュー</div>
             <div class="estimatePaper" id="estimatePreview">（まだ見積が作れません：縮尺確定→床㎡/壁mを入力）</div>
+            <div class="row" style="margin-top:10px;">
+              <button class="btn btnLav" type="button" id="btnOpenPricePopup" disabled>完了（箇所ごとの単価調整）</button>
+            </div>
           </div>
 
           <div class="section">
@@ -1024,6 +1107,8 @@
     <button class="tab" id="btnModePoly">床㎡</button>
     <button class="tab" id="btnModeWall">壁m</button>
     <button class="tab" id="btnModePan">移動</button>
+    <button class="tab" id="btnConfirmPc" disabled>確定</button>
+    <button class="tab" id="btnOpenPricePopupPc" disabled>完了</button>
     <button class="tab tabMobilePanel" id="btnOpenScale" style="background:rgba(255,241,184,.85);">縮尺</button>
     <button class="tab tabMobilePanel" id="btnOpenEstimate" style="background:rgba(231,219,255,.75);">見積</button>
 
@@ -1051,6 +1136,36 @@
       </button>
     </div>
     <div class="scalePopupBody" id="scalePopupSlot"></div>
+  </div>
+
+  <!-- Price popup (per-item) -->
+  <div id="pricePopupBackdrop" class="pricePopupBackdrop" aria-hidden="true"></div>
+  <div id="pricePopup" class="pricePopup" aria-hidden="true">
+    <div class="pricePopupHead">
+      <div>箇所ごとの単価</div>
+      <button class="iconBtn" type="button" id="btnPricePopupClose" aria-label="閉じる" style="margin-left:auto;">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="pricePopupBody">
+      <div class="hint" style="margin-bottom:10px;">
+        ここで各箇所（床/壁）の単価を調整できます（未入力は0扱い）。<br/>
+        ※ スクショはDriveに保存し、URLをメール本文に追記します（リンクを知っている人は閲覧可）。
+      </div>
+
+      <div class="sectionTitle">床（㎡）</div>
+      <div id="priceFloorsSlot" style="margin-bottom:14px;"></div>
+
+      <div class="sectionTitle">壁（m）</div>
+      <div id="priceWallsSlot"></div>
+
+      <div class="priceFooter">
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btnLav" type="button" id="btnPricePopupCancel">閉じる</button>
+          <button class="btn btnPeach" type="button" id="btnPricePopupApply">反映</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Mobile: single floating panel with 5 tabs -->
@@ -1091,6 +1206,7 @@
         <div class="row">
           <button class="btn btnSky" type="button" id="btnSetArea">床㎡モードにする</button>
           <button class="btn btnLav" type="button" id="btnOpenScaleFromArea">縮尺へ</button>
+          <button class="btn btnMint" type="button" id="btnConfirmArea">確定（追加）</button>
         </div>
       </div>
 
@@ -1102,6 +1218,7 @@
         <div class="row">
           <button class="btn btnPeach" type="button" id="btnSetWall">壁mモードにする</button>
           <button class="btn btnLav" type="button" id="btnOpenScaleFromWall">縮尺へ</button>
+          <button class="btn btnMint" type="button" id="btnConfirmWall">確定（追加）</button>
         </div>
       </div>
 
@@ -1137,8 +1254,11 @@
     mmPerPx: null,
     pixelDist: null,
 
-    polyPts: [],
-    wallPts: [],
+    // ===== Multi-measure (max floors=20, walls=20) =====
+    floorItems: [], // {id, pts:[{x,y}...], unitPrices:{...}}
+    wallItems:  [], // {id, pts:[{x,y}...], unitPrices:{...}}
+    draftPolyPts: [],
+    draftWallPts: [],
 
     zoom: 1,
     lastOverlayW: null,
@@ -1169,6 +1289,8 @@
     btnModePoly: document.getElementById("btnModePoly"),
     btnModeWall: document.getElementById("btnModeWall"),
     btnModePan: document.getElementById("btnModePan"),
+    btnConfirmPc: document.getElementById("btnConfirmPc"),
+    btnOpenPricePopupPc: document.getElementById("btnOpenPricePopupPc"),
     btnOpenScale: document.getElementById("btnOpenScale"),
     btnOpenEstimate: document.getElementById("btnOpenEstimate"),
     zoomLabel: document.getElementById("zoomLabel"),
@@ -1223,6 +1345,8 @@
     kpiWall2: document.getElementById("kpiWall2"),
     btnSetArea: document.getElementById("btnSetArea"),
     btnSetWall: document.getElementById("btnSetWall"),
+    btnConfirmArea: document.getElementById("btnConfirmArea"),
+    btnConfirmWall: document.getElementById("btnConfirmWall"),
     btnOpenScaleFromArea: document.getElementById("btnOpenScaleFromArea"),
     btnOpenScaleFromWall: document.getElementById("btnOpenScaleFromWall"),
     btnSend2: document.getElementById("btnSend2"),
@@ -1237,6 +1361,14 @@
     scalePopup: document.getElementById("scalePopup"),
     scalePopupSlot: document.getElementById("scalePopupSlot"),
     btnScalePopupClose: document.getElementById("btnScalePopupClose"),
+    btnOpenPricePopup: document.getElementById("btnOpenPricePopup"),
+    pricePopupBackdrop: document.getElementById("pricePopupBackdrop"),
+    pricePopup: document.getElementById("pricePopup"),
+    btnPricePopupClose: document.getElementById("btnPricePopupClose"),
+    btnPricePopupCancel: document.getElementById("btnPricePopupCancel"),
+    btnPricePopupApply: document.getElementById("btnPricePopupApply"),
+    priceFloorsSlot: document.getElementById("priceFloorsSlot"),
+    priceWallsSlot: document.getElementById("priceWallsSlot"),
     projectName: document.getElementById("projectName"),
     customerEmail: document.getElementById("customerEmail"),
     pdfCanvas: document.getElementById("pdfCanvas"),
@@ -1344,6 +1476,8 @@
     if (el.btnSendM) el.btnSendM.disabled = !ready;
     if (el.btnSendH) el.btnSendH.disabled = !ready;
     if (el.btnSendEstimateBottom) el.btnSendEstimateBottom.disabled = !ready;
+    if (el.btnOpenPricePopup) el.btnOpenPricePopup.disabled = !ready;
+    if (el.btnConfirmPc) el.btnConfirmPc.disabled = !ready;
     el.btnZoomOut.disabled = !ready;
     el.btnZoomIn.disabled = !ready;
     el.btnZoomReset.disabled = !ready;
@@ -1392,6 +1526,7 @@
     drawOverlay();
     setStatus(buildStatusText());
     refreshEstimateUi();
+    refreshConfirmPcButton();
   }
 
   function dist(a,b){
@@ -1408,23 +1543,49 @@
     return Math.abs(sum) / 2;
   }
 
-  function computeAreaM2(){
+  function computeAreaM2FromPts(pts){
     if(!state.mmPerPx) return null;
-    if(state.polyPts.length < 3) return null;
-    const areaPx2 = shoelaceArea(state.polyPts);
+    if(!pts || pts.length < 3) return null;
+    const areaPx2 = shoelaceArea(pts);
     const areaMm2 = areaPx2 * (state.mmPerPx ** 2);
     return areaMm2 / 1_000_000;
   }
 
-  function computeWallM(){
+  function computeWallMFromPts(pts){
     if(!state.mmPerPx) return null;
-    if(state.wallPts.length < 2) return null;
+    if(!pts || pts.length < 2) return null;
     let sumPx = 0;
-    for(let i=1;i<state.wallPts.length;i++){
-      sumPx += dist(state.wallPts[i-1], state.wallPts[i]);
+    for(let i=1;i<pts.length;i++){
+      sumPx += dist(pts[i-1], pts[i]);
     }
     const sumMm = sumPx * state.mmPerPx;
     return sumMm / 1000;
+  }
+
+  function computeTotalAreaM2(includeDraft=true){
+    let sum = 0;
+    for(const it of (state.floorItems || [])){
+      const a = computeAreaM2FromPts(it.pts);
+      if(a != null) sum += a;
+    }
+    if(includeDraft){
+      const a = computeAreaM2FromPts(state.draftPolyPts);
+      if(a != null) sum += a;
+    }
+    return sum > 0 ? sum : null;
+  }
+
+  function computeTotalWallM(includeDraft=true){
+    let sum = 0;
+    for(const it of (state.wallItems || [])){
+      const m = computeWallMFromPts(it.pts);
+      if(m != null) sum += m;
+    }
+    if(includeDraft){
+      const m = computeWallMFromPts(state.draftWallPts);
+      if(m != null) sum += m;
+    }
+    return sum > 0 ? sum : null;
   }
 
   function isValidEmail(email){
@@ -1484,48 +1645,71 @@
   }
 
   function buildEstimateText(){
-    const area = computeAreaM2();
-    const wallM = computeWallM();
-    if(area == null && wallM == null) return null;
-    const unit = getUnitPrices();
-    const qty = computeAutoQty(area);
+    const floors = state.floorItems || [];
+    const walls = state.wallItems || [];
+    if(floors.length === 0 && walls.length === 0) return null;
 
-    const safeArea = area ?? 0;
-    const safeWall = wallM ?? 0;
-
-    const laborFloor = Math.round(safeArea * unit.floorPerM2);
-    const laborEdge = Math.round(safeWall * unit.edgePerM);
-
-    const materialSupport = qty ? Math.round(qty.supportFoot * unit.supportFoot) : 0;
-    const materialPlywood = qty ? Math.round(qty.plywood * unit.plywood) : 0;
-    const materialVeneer12 = qty ? Math.round(qty.veneer12 * unit.veneer12) : 0;
-
-    const total = laborFloor + laborEdge + materialSupport + materialPlywood + materialVeneer12;
-
+    let total = 0;
     const lines = [];
     lines.push(`現場名：${(el.projectName.value || "").trim()}`);
     lines.push(`図面：${state.pdfMeta?.name || "(Drive未保存)"} / page ${state.renderedPage}`);
-    lines.push("");
-    lines.push("【施工】");
-    lines.push(`・乾式二重床床組\t${safeArea.toFixed(3)}㎡ ＠${unit.floorPerM2}円 = ${laborFloor}円`);
-    lines.push(`・際根太\t\t${safeWall.toFixed(3)}m ＠${unit.edgePerM}円 = ${laborEdge}円`);
-    lines.push("");
-    lines.push("【材料】");
-    lines.push(`・支持脚 WP125\t${qty ? qty.supportFoot : "—"}本`);
-    lines.push(`・パーチ合板\t${qty ? qty.plywood : "—"}枚`);
-    lines.push(`・ベニヤ12mm\t${qty ? qty.veneer12 : "—"}枚`);
-    lines.push("・LVL間柱\t—束（任意）");
+
+    const draftInfo = [];
+    if(state.draftPolyPts && state.draftPolyPts.length) draftInfo.push(`床下書き:${state.draftPolyPts.length}点`);
+    if(state.draftWallPts && state.draftWallPts.length) draftInfo.push(`壁下書き:${state.draftWallPts.length}点`);
+    if(draftInfo.length) lines.push(`※未確定あり（${draftInfo.join(" / ")}）`);
+
+    // Floors per item
+    if(floors.length){
+      lines.push("");
+      lines.push("【床（㎡）】");
+      for(let i=0;i<floors.length;i++){
+        const it = floors[i];
+        const area = computeAreaM2FromPts(it.pts) ?? 0;
+        const u = it.unitPrices || {};
+        const floorPerM2 = n0(u.floorPerM2);
+        const supportFootUnit = n0(u.supportFoot);
+        const plywoodUnit = n0(u.plywood);
+        const veneer12Unit = n0(u.veneer12);
+        const labor = Math.round(area * floorPerM2);
+        const qty = computeAutoQty(area);
+        const mat = qty
+          ? (Math.round(qty.supportFoot * supportFootUnit) + Math.round(qty.plywood * plywoodUnit) + Math.round(qty.veneer12 * veneer12Unit))
+          : 0;
+        const sub = labor + mat;
+        total += sub;
+        lines.push(`床${i+1}\t${area.toFixed(3)}㎡ / 施工＠${floorPerM2}=${labor}円 / 材料=${mat}円 / 小計=${sub}円`);
+      }
+    }
+
+    // Walls per item
+    if(walls.length){
+      lines.push("");
+      lines.push("【壁（m）】");
+      for(let i=0;i<walls.length;i++){
+        const it = walls[i];
+        const m = computeWallMFromPts(it.pts) ?? 0;
+        const u = it.unitPrices || {};
+        const edgePerM = n0(u.edgePerM);
+        const labor = Math.round(m * edgePerM);
+        total += labor;
+        lines.push(`壁${i+1}\t${m.toFixed(3)}m / 際根太＠${edgePerM}=${labor}円`);
+      }
+    }
+
     lines.push("");
     lines.push("【合計】");
     lines.push(`総額：${total}円`);
 
-    return { text: lines.join("\n"), total, areaM2: area, wallM, qty, unit };
+    const areaM2 = computeTotalAreaM2(false);
+    const wallM = computeTotalWallM(false);
+    return { text: lines.join("\n"), total, areaM2, wallM, floorsCount: floors.length, wallsCount: walls.length };
   }
 
   function refreshEstimateUi(){
     const est = buildEstimateText();
     if(!est){
-      el.estimatePreview.textContent = "（まだ見積が作れません：縮尺確定→床㎡/壁mを入力）";
+      el.estimatePreview.textContent = "（まだ見積が作れません：縮尺確定→床/壁を「確定（追加）」してください）";
       if (el.kpiArea) el.kpiArea.textContent = "—㎡";
       if (el.kpiWall) el.kpiWall.textContent = "—m";
       if (el.kpiArea2) el.kpiArea2.textContent = "—㎡";
@@ -1548,6 +1732,7 @@
       el.estimateMiniSummaryText.textContent = `縮尺：${scale} / 床：${area} / 壁：${wall}`;
     }
     updateProgressUi();
+    refreshPricePopupButtons();
   }
 
   function setStepClass(stepEl, isOn, isDone){
@@ -1559,8 +1744,8 @@
   function updateProgressUi(){
     const hasPdf = !!state.pdfDoc;
     const hasScale = !!state.mmPerPx;
-    const hasArea = state.polyPts.length >= 3 && hasScale;
-    const hasWall = state.wallPts.length >= 2 && hasScale;
+    const hasArea = hasScale && ((state.floorItems && state.floorItems.length > 0) || (state.draftPolyPts && state.draftPolyPts.length >= 3));
+    const hasWall = hasScale && ((state.wallItems && state.wallItems.length > 0) || (state.draftWallPts && state.draftWallPts.length >= 2));
     const hasEstimate = (hasArea || hasWall) && hasScale;
 
     let current = "pdf";
@@ -1601,6 +1786,100 @@
     syncScaleBlockPlacement();
     if(pcScalePopupOpen && el.actualMm){
       try{ el.actualMm.focus(); } catch(_) {}
+    }
+  }
+
+  let pricePopupOpen = false;
+  function setPricePopupOpen(open){
+    pricePopupOpen = !!open;
+    if(el.pricePopup) el.pricePopup.classList.toggle("on", pricePopupOpen);
+    if(el.pricePopupBackdrop) el.pricePopupBackdrop.classList.toggle("on", pricePopupOpen);
+    if(el.pricePopup) el.pricePopup.setAttribute("aria-hidden", pricePopupOpen ? "false" : "true");
+    if(el.pricePopupBackdrop) el.pricePopupBackdrop.setAttribute("aria-hidden", pricePopupOpen ? "false" : "true");
+    if(pricePopupOpen) renderPricePopupTables();
+  }
+
+  function n0(v){
+    const x = parseFloat(v);
+    return Number.isFinite(x) && x >= 0 ? x : 0;
+  }
+
+  function renderPricePopupTables(){
+    if(!el.priceFloorsSlot || !el.priceWallsSlot) return;
+
+    // Floors
+    const floors = state.floorItems || [];
+    if(floors.length === 0){
+      el.priceFloorsSlot.innerHTML = '<div class="hint">床の確定済み箇所がありません。</div>';
+    } else {
+      let html = '';
+      html += '<table class="priceTable" aria-label="床の単価一覧">';
+      html += '<thead><tr>';
+      html += '<th>床</th><th>面積(㎡)</th><th>床組(円/㎡)</th><th>支持脚(円/本)</th><th>合板(円/枚)</th><th>ベニヤ(円/枚)</th>';
+      html += '</tr></thead><tbody>';
+      for(let i=0;i<floors.length;i++){
+        const it = floors[i];
+        const area = computeAreaM2FromPts(it.pts) ?? 0;
+        const u = it.unitPrices || {};
+        html += '<tr>';
+        html += `<td>床${i+1}</td>`;
+        html += `<td>${area.toFixed(3)}</td>`;
+        html += `<td><input type="number" min="0" step="1" data-price-kind="floor" data-idx="${i}" data-field="floorPerM2" value="${n0(u.floorPerM2)}"></td>`;
+        html += `<td><input type="number" min="0" step="1" data-price-kind="floor" data-idx="${i}" data-field="supportFoot" value="${n0(u.supportFoot)}"></td>`;
+        html += `<td><input type="number" min="0" step="1" data-price-kind="floor" data-idx="${i}" data-field="plywood" value="${n0(u.plywood)}"></td>`;
+        html += `<td><input type="number" min="0" step="1" data-price-kind="floor" data-idx="${i}" data-field="veneer12" value="${n0(u.veneer12)}"></td>`;
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      el.priceFloorsSlot.innerHTML = html;
+    }
+
+    // Walls
+    const walls = state.wallItems || [];
+    if(walls.length === 0){
+      el.priceWallsSlot.innerHTML = '<div class="hint">壁の確定済み箇所がありません。</div>';
+    } else {
+      let html = '';
+      html += '<table class="priceTable" aria-label="壁の単価一覧">';
+      html += '<thead><tr>';
+      html += '<th>壁</th><th>長さ(m)</th><th>際根太(円/m)</th>';
+      html += '</tr></thead><tbody>';
+      for(let i=0;i<walls.length;i++){
+        const it = walls[i];
+        const m = computeWallMFromPts(it.pts) ?? 0;
+        const u = it.unitPrices || {};
+        html += '<tr>';
+        html += `<td>壁${i+1}</td>`;
+        html += `<td>${m.toFixed(3)}</td>`;
+        html += `<td><input type="number" min="0" step="1" data-price-kind="wall" data-idx="${i}" data-field="edgePerM" value="${n0(u.edgePerM)}"></td>`;
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      el.priceWallsSlot.innerHTML = html;
+    }
+  }
+
+  function applyPricePopupEdits(){
+    if(!el.pricePopup) return;
+    const inputs = el.pricePopup.querySelectorAll('input[data-price-kind][data-idx][data-field]');
+    for(const input of inputs){
+      const kind = input.getAttribute("data-price-kind");
+      const idx = parseInt(input.getAttribute("data-idx"), 10);
+      const field = input.getAttribute("data-field");
+      const val = n0(input.value);
+      if(kind === "floor"){
+        const it = state.floorItems && state.floorItems[idx];
+        if(it){
+          if(!it.unitPrices) it.unitPrices = {};
+          it.unitPrices[field] = val;
+        }
+      } else if(kind === "wall"){
+        const it = state.wallItems && state.wallItems[idx];
+        if(it){
+          if(!it.unitPrices) it.unitPrices = {};
+          it.unitPrices[field] = val;
+        }
+      }
     }
   }
 
@@ -1721,13 +2000,16 @@
     if(state.mmPerPx != null) lines.push(`スケール：1px = ${state.mmPerPx.toFixed(6)}mm`);
     else lines.push("スケール：未確定（寸法線2点→mm入力→確定）");
 
-    const area = computeAreaM2();
+    const area = computeTotalAreaM2(true);
     if(area != null) lines.push(`面積：${area.toFixed(3)} ㎡`);
     else lines.push("面積：未確定（囲い3点以上＋スケール確定）");
 
-    const wallM = computeWallM();
+    const wallM = computeTotalWallM(true);
     if(wallM != null) lines.push(`壁長さ：${wallM.toFixed(3)} m`);
     else lines.push("壁長さ：未確定（壁mで2点以上＋スケール確定）");
+
+    lines.push(`床：${(state.floorItems || []).length}/20（下書き:${(state.draftPolyPts || []).length}点）`);
+    lines.push(`壁：${(state.wallItems || []).length}/20（下書き:${(state.draftWallPts || []).length}点）`);
 
     lines.push(`保存：${fmtTime(state.lastSavedAt)}`);
     lines.push(`送信：${fmtTime(state.lastSentAt)}`);
@@ -1742,6 +2024,86 @@
     const x = xCss * (el.overlay.width / rect.width);
     const y = yCss * (el.overlay.height / rect.height);
     return {x, y};
+  }
+
+  function clonePts(pts){
+    return (pts || []).map(p => ({ x: p.x, y: p.y }));
+  }
+
+  function confirmFloorItem(){
+    if(!state.mmPerPx) return alert("先に縮尺を確定してください");
+    if(!state.draftPolyPts || state.draftPolyPts.length < 3) return alert("床㎡は3点以上で囲ってください");
+    if((state.floorItems || []).length >= 20) return alert("床は最大20か所までです");
+    const id = `F${(state.floorItems.length + 1)}_${Date.now()}`;
+    const unit = getUnitPrices();
+    state.floorItems.push({
+      id,
+      pts: clonePts(state.draftPolyPts),
+      unitPrices: {
+        floorPerM2: unit.floorPerM2,
+        supportFoot: unit.supportFoot,
+        plywood: unit.plywood,
+        veneer12: unit.veneer12,
+      }
+    });
+    state.draftPolyPts = [];
+    drawOverlay();
+    setStatus(buildStatusText());
+    refreshEstimateUi();
+    updateProgressUi();
+    refreshConfirmPcButton();
+    refreshPricePopupButtons();
+  }
+
+  function confirmWallItem(){
+    if(!state.mmPerPx) return alert("先に縮尺を確定してください");
+    if(!state.draftWallPts || state.draftWallPts.length < 2) return alert("壁mは2点以上でなぞってください");
+    if((state.wallItems || []).length >= 20) return alert("壁は最大20か所までです");
+    const id = `W${(state.wallItems.length + 1)}_${Date.now()}`;
+    const unit = getUnitPrices();
+    state.wallItems.push({
+      id,
+      pts: clonePts(state.draftWallPts),
+      unitPrices: {
+        edgePerM: unit.edgePerM,
+      }
+    });
+    state.draftWallPts = [];
+    drawOverlay();
+    setStatus(buildStatusText());
+    refreshEstimateUi();
+    updateProgressUi();
+    refreshConfirmPcButton();
+    refreshPricePopupButtons();
+  }
+
+  function canConfirmNow(){
+    if(!state.mmPerPx) return { ok:false, reason:"縮尺が未確定です" };
+    if(state.mode === "poly"){
+      if((state.floorItems || []).length >= 20) return { ok:false, reason:"床は最大20か所までです" };
+      if(!state.draftPolyPts || state.draftPolyPts.length < 3) return { ok:false, reason:"床は3点以上で囲ってください" };
+      return { ok:true };
+    }
+    if(state.mode === "wall"){
+      if((state.wallItems || []).length >= 20) return { ok:false, reason:"壁は最大20か所までです" };
+      if(!state.draftWallPts || state.draftWallPts.length < 2) return { ok:false, reason:"壁は2点以上でなぞってください" };
+      return { ok:true };
+    }
+    return { ok:false, reason:"床/壁モードで確定できます" };
+  }
+
+  function refreshConfirmPcButton(){
+    if(!el.btnConfirmPc) return;
+    const c = canConfirmNow();
+    el.btnConfirmPc.disabled = !c.ok;
+    if(c.reason) el.btnConfirmPc.title = c.reason;
+  }
+
+  function refreshPricePopupButtons(){
+    const hasAny = ((state.floorItems && state.floorItems.length) || 0) + ((state.wallItems && state.wallItems.length) || 0) > 0;
+    // 「完了（単価調整）」は確定済みアイテムが1つ以上ある時だけ有効
+    if (el.btnOpenPricePopup) el.btnOpenPricePopup.disabled = !hasAny;
+    if (el.btnOpenPricePopupPc) el.btnOpenPricePopupPc.disabled = !hasAny;
   }
 
   async function loadPdfFromBytes(arrayBuffer){
@@ -1852,8 +2214,10 @@
         const rx = targetW / oldW;
         const ry = targetH / oldH;
         scalePointArray(state.scalePts, rx, ry);
-        scalePointArray(state.polyPts, rx, ry);
-        scalePointArray(state.wallPts, rx, ry);
+        scalePointArray(state.draftPolyPts, rx, ry);
+        scalePointArray(state.draftWallPts, rx, ry);
+        for(const it of (state.floorItems || [])) scalePointArray(it.pts, rx, ry);
+        for(const it of (state.wallItems || [])) scalePointArray(it.pts, rx, ry);
 
         // スケール（mmPerPx）も整合させる（ズーム後も数量が変わらないように）
         if(state.actualMm && state.scalePts.length === 2){
@@ -1895,15 +2259,44 @@
       if(state.scalePts.length === 2) drawLine(state.scalePts[0], state.scalePts[1], "scale");
     }
 
-    if(state.polyPts.length){
-      drawPoints(state.polyPts, "poly");
-      drawPolyline(state.polyPts);
-      if(state.polyPts.length >= 3) drawLine(state.polyPts[state.polyPts.length-1], state.polyPts[0], "hint");
+    // Confirmed floor items
+    let idx = 1;
+    for(const it of (state.floorItems || [])){
+      const pts = it.pts || [];
+      fillPolygon(pts, "rgba(91,214,166,.18)");
+      drawPolyline(pts, "poly");
+      if(pts.length >= 3) drawLine(pts[pts.length-1], pts[0], "hint");
+      const c = polygonCentroid(pts);
+      if(c) drawLabel(`床${idx}`, c.x, c.y, "rgba(35,125,85,.95)");
+      idx++;
+    }
+    // Draft floor
+    if(state.draftPolyPts && state.draftPolyPts.length){
+      const pts = state.draftPolyPts;
+      drawPoints(pts, "poly");
+      drawPolyline(pts, "poly");
+      if(pts.length >= 3){
+        fillPolygon(pts, "rgba(91,214,166,.10)");
+        drawLine(pts[pts.length-1], pts[0], "hint");
+      }
     }
 
-    if(state.wallPts.length){
-      drawPoints(state.wallPts, "wall");
-      drawPolyline(state.wallPts, "wall");
+    // Confirmed wall items
+    let widx = 1;
+    for(const it of (state.wallItems || [])){
+      const pts = it.pts || [];
+      drawPolyline(pts, "wall");
+      if(pts.length >= 2){
+        const mid = pts[Math.floor(pts.length / 2)];
+        if(mid) drawLabel(`壁${widx}`, mid.x, mid.y, "rgba(180,120,15,.95)");
+      }
+      widx++;
+    }
+    // Draft wall
+    if(state.draftWallPts && state.draftWallPts.length){
+      const pts = state.draftWallPts;
+      drawPoints(pts, "wall");
+      drawPolyline(pts, "wall");
     }
   }
 
@@ -1942,6 +2335,69 @@
     ctxOv.stroke();
   }
 
+  function polygonCentroid(pts){
+    if(!pts || pts.length === 0) return null;
+    let x = 0, y = 0;
+    for(const p of pts){ x += p.x; y += p.y; }
+    return { x: x / pts.length, y: y / pts.length };
+  }
+
+  function drawLabel(text, x, y, color="rgba(30,45,70,.95)"){
+    ctxOv.save();
+    ctxOv.font = "bold 14px system-ui, -apple-system, Segoe UI, sans-serif";
+    ctxOv.textAlign = "center";
+    ctxOv.textBaseline = "middle";
+    ctxOv.strokeStyle = "rgba(0,0,0,.18)";
+    ctxOv.lineWidth = 3;
+    ctxOv.strokeText(String(text), x, y);
+    ctxOv.fillStyle = color;
+    ctxOv.fillText(String(text), x, y);
+    ctxOv.restore();
+  }
+
+  function fillPolygon(pts, fillStyle){
+    if(!pts || pts.length < 3) return;
+    ctxOv.save();
+    ctxOv.beginPath();
+    ctxOv.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctxOv.lineTo(pts[i].x, pts[i].y);
+    ctxOv.closePath();
+    ctxOv.fillStyle = fillStyle;
+    ctxOv.fill();
+    ctxOv.restore();
+  }
+
+  function buildCompositeScreenshotDataUrl(options = {}){
+    if(!el.pdfCanvas || !el.overlay) throw new Error("canvasが見つかりません");
+    const maxW = Number.isFinite(options.maxWidth) ? options.maxWidth : 1600;
+    const quality = Number.isFinite(options.quality) ? options.quality : 0.75;
+
+    const srcW = el.pdfCanvas.width || 0;
+    const srcH = el.pdfCanvas.height || 0;
+    if(srcW <= 0 || srcH <= 0) throw new Error("PDFが描画されていません");
+
+    const scale = (srcW > maxW) ? (maxW / srcW) : 1;
+    const outW = Math.max(1, Math.floor(srcW * scale));
+    const outH = Math.max(1, Math.floor(srcH * scale));
+
+    const c = document.createElement("canvas");
+    c.width = outW;
+    c.height = outH;
+    const ctx = c.getContext("2d");
+    if(!ctx) throw new Error("canvas contextが取得できません");
+
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,outW,outH);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    // PDF + overlay を合成（overlayは透明あり）
+    ctx.drawImage(el.pdfCanvas, 0, 0, outW, outH);
+    ctx.drawImage(el.overlay, 0, 0, outW, outH);
+
+    return c.toDataURL("image/jpeg", quality);
+  }
+
   function applyScale(){
     const mm = parseFloat(el.actualMm.value || "");
     if(!mm || mm <= 0) return alert("実際の長さ（mm）を入れてください（例：5000）");
@@ -1957,6 +2413,11 @@
     setStatus(buildStatusText());
     refreshEstimateUi();
     updateProgressUi();
+    refreshConfirmPcButton();
+    refreshPricePopupButtons();
+
+    // PC: 縮尺確定後はスケールポップアップを閉じる
+    if(!isMobileLayout() && pcScalePopupOpen) setPcScalePopupOpen(false);
   }
 
   function undo(){
@@ -1966,20 +2427,32 @@
       state.mmPerPx = null;
       state.pixelDist = null;
     } else if(state.mode === "poly") {
-      state.polyPts.pop();
+      if(state.draftPolyPts && state.draftPolyPts.length){
+        state.draftPolyPts.pop();
+      } else if (state.floorItems && state.floorItems.length){
+        state.floorItems.pop();
+      }
     } else {
-      state.wallPts.pop();
+      if(state.draftWallPts && state.draftWallPts.length){
+        state.draftWallPts.pop();
+      } else if (state.wallItems && state.wallItems.length){
+        state.wallItems.pop();
+      }
     }
     drawOverlay();
     setStatus(buildStatusText());
     refreshEstimateUi();
     updateProgressUi();
+    refreshConfirmPcButton();
+    refreshPricePopupButtons();
   }
 
   function clearAll(){
     state.scalePts = [];
-    state.polyPts = [];
-    state.wallPts = [];
+    state.floorItems = [];
+    state.wallItems = [];
+    state.draftPolyPts = [];
+    state.draftWallPts = [];
     state.actualMm = null;
     state.mmPerPx = null;
     state.pixelDist = null;
@@ -1987,6 +2460,8 @@
     setStatus(buildStatusText());
     refreshEstimateUi();
     updateProgressUi();
+    refreshConfirmPcButton();
+    refreshPricePopupButtons();
   }
 
   function fileToDataUrl(file){
@@ -2052,13 +2527,57 @@
   }
 
   function buildEstimatePayload(sendEmail){
-    const area = computeAreaM2();
-    const wallM = computeWallM();
     const est = buildEstimateText();
     if(!state.mmPerPx) throw new Error("スケールが未確定です（寸法線2点→mm入力→確定）");
-    if(area == null && wallM == null) throw new Error("床㎡または壁mを入力してください");
+    if(!est) throw new Error("床/壁が未確定です（床/壁で拾ってから「確定（追加）」してください）");
+
+    const area = computeTotalAreaM2(false);
+    const wallM = computeTotalWallM(false);
+
+    const clientEstimateId = `E_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    const floorDetails = (state.floorItems || []).map((it, i)=>{
+      const a = computeAreaM2FromPts(it.pts) ?? 0;
+      const u = it.unitPrices || {};
+      const floorPerM2 = n0(u.floorPerM2);
+      const supportFootUnit = n0(u.supportFoot);
+      const plywoodUnit = n0(u.plywood);
+      const veneer12Unit = n0(u.veneer12);
+      const labor = Math.round(a * floorPerM2);
+      const qty = computeAutoQty(a);
+      const material = qty
+        ? (Math.round(qty.supportFoot * supportFootUnit) + Math.round(qty.plywood * plywoodUnit) + Math.round(qty.veneer12 * veneer12Unit))
+        : 0;
+      const subtotal = labor + material;
+      return {
+        id: it.id || `F${i+1}`,
+        index: i + 1,
+        areaM2: a,
+        pts: it.pts || [],
+        unitPrices: { floorPerM2, supportFoot: supportFootUnit, plywood: plywoodUnit, veneer12: veneer12Unit },
+        qty,
+        laborYen: labor,
+        materialYen: material,
+        subtotalYen: subtotal,
+      };
+    });
+    const wallDetails = (state.wallItems || []).map((it, i)=>{
+      const m = computeWallMFromPts(it.pts) ?? 0;
+      const u = it.unitPrices || {};
+      const edgePerM = n0(u.edgePerM);
+      const labor = Math.round(m * edgePerM);
+      return {
+        id: it.id || `W${i+1}`,
+        index: i + 1,
+        wallM: m,
+        pts: it.pts || [],
+        unitPrices: { edgePerM },
+        laborYen: labor,
+        subtotalYen: labor,
+      };
+    });
 
     const payload = {
+      clientEstimateId,
       projectName: (el.projectName.value || "").trim(),
       customerEmail: (el.customerEmail.value || "").trim(),
       ccEmail: "", // GAS側のADMIN_EMAILを優先。必要なら将来ここに入れる
@@ -2070,9 +2589,9 @@
       mmPerPx: state.mmPerPx,
       areaM2: area,
       wallM: wallM,
-      pointsJson: JSON.stringify({ scalePts: state.scalePts, polyPts: state.polyPts, wallPts: state.wallPts }),
-      unitPrices: getUnitPrices(),
-      qty: est?.qty || null,
+      floorItems: floorDetails,
+      wallItems: wallDetails,
+      pointsJson: JSON.stringify({ scalePts: state.scalePts, floorItems: state.floorItems, wallItems: state.wallItems }),
       estimateText: est ? est.text : "",
       total: est ? est.total : 0,
       sendEmail: !!sendEmail,
@@ -2087,6 +2606,12 @@
     try{
       saveUnitPricesToLocalStorage();
       const payload = buildEstimatePayload(true);
+      // スクショ（PDF + 操作結果）を作ってGASへ渡す（Drive保存→URL化はGAS側）
+      try{
+        payload.screenshotDataUrl = buildCompositeScreenshotDataUrl({ maxWidth: 1600, quality: 0.75 });
+      } catch (e) {
+        throw new Error("スクショ生成に失敗しました：" + (e && e.message ? e.message : String(e)));
+      }
       const res = await callGasApi('saveEstimate', { payload });
       const emailResult = res && typeof res.emailResult === "string" ? res.emailResult : "";
 
@@ -2147,6 +2672,17 @@
   el.btnModePoly.addEventListener("click", ()=> setMode("poly"));
   el.btnModeWall.addEventListener("click", ()=> setMode("wall"));
   el.btnModePan.addEventListener("click", ()=> setMode("pan"));
+  if (el.btnConfirmPc) el.btnConfirmPc.addEventListener("click", ()=>{
+    const c = canConfirmNow();
+    if(!c.ok){
+      // desktop: keep it explicit
+      alert(c.reason || "確定できません");
+      return;
+    }
+    if(state.mode === "poly") confirmFloorItem();
+    else if(state.mode === "wall") confirmWallItem();
+  });
+  if (el.btnOpenPricePopupPc) el.btnOpenPricePopupPc.addEventListener("click", ()=> setPricePopupOpen(true));
 
   // Mobile panel open buttons
   const focusScaleTop = ()=>{
@@ -2223,6 +2759,8 @@
   });
   if (el.btnSetArea) el.btnSetArea.addEventListener("click", ()=> { setMode("poly"); setMobilePanelMinimized(true); });
   if (el.btnSetWall) el.btnSetWall.addEventListener("click", ()=> { setMode("wall"); setMobilePanelMinimized(true); });
+  if (el.btnConfirmArea) el.btnConfirmArea.addEventListener("click", confirmFloorItem);
+  if (el.btnConfirmWall) el.btnConfirmWall.addEventListener("click", confirmWallItem);
   if (el.btnOpenScaleFromArea) el.btnOpenScaleFromArea.addEventListener("click", focusScaleTop);
   if (el.btnOpenScaleFromWall) el.btnOpenScaleFromWall.addEventListener("click", focusScaleTop);
   if (el.btnSend2) el.btnSend2.addEventListener("click", ()=> el.btnSend.click());
@@ -2276,15 +2814,16 @@
       state.scalePts.push(p);
       if(state.scalePts.length === 2) state.pixelDist = dist(state.scalePts[0], state.scalePts[1]);
     } else if(state.mode === "poly") {
-      state.polyPts.push(p);
+      state.draftPolyPts.push(p);
     } else {
       // wall
-      state.wallPts.push(p);
+      state.draftWallPts.push(p);
     }
 
     drawOverlay();
     setStatus(buildStatusText());
     refreshEstimateUi();
+    refreshConfirmPcButton();
   }, {passive:false});
 
   el.overlay.addEventListener("pointermove", (e)=>{
@@ -2331,6 +2870,8 @@
   loadUnitPricesFromLocalStorage();
   refreshEstimateUi();
   updateProgressUi();
+  refreshConfirmPcButton();
+  refreshPricePopupButtons();
   syncPdfControlsPlacement();
   syncScaleBlockPlacement();
   syncEstimateBodyPlacement();
@@ -2349,8 +2890,23 @@
   // PC scale popup close interactions
   if (el.btnScalePopupClose) el.btnScalePopupClose.addEventListener("click", ()=> setPcScalePopupOpen(false));
   if (el.scalePopupBackdrop) el.scalePopupBackdrop.addEventListener("click", ()=> setPcScalePopupOpen(false));
+
+  // Price popup interactions
+  if (el.btnOpenPricePopup) el.btnOpenPricePopup.addEventListener("click", ()=> setPricePopupOpen(true));
+  if (el.btnPricePopupClose) el.btnPricePopupClose.addEventListener("click", ()=> setPricePopupOpen(false));
+  if (el.btnPricePopupCancel) el.btnPricePopupCancel.addEventListener("click", ()=> setPricePopupOpen(false));
+  if (el.pricePopupBackdrop) el.pricePopupBackdrop.addEventListener("click", ()=> setPricePopupOpen(false));
+  if (el.btnPricePopupApply) el.btnPricePopupApply.addEventListener("click", ()=>{
+    applyPricePopupEdits();
+    setPricePopupOpen(false);
+    // reflect changes in preview (next step will make preview per-item)
+    refreshEstimateUi();
+    setStatus(buildStatusText());
+  });
+
   window.addEventListener("keydown", (e)=>{
     if(e.key === "Escape" && pcScalePopupOpen) setPcScalePopupOpen(false);
+    if(e.key === "Escape" && pricePopupOpen) setPricePopupOpen(false);
   });
 </script>
  

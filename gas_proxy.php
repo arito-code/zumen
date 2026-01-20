@@ -2,7 +2,7 @@
 // gas_proxy.php
 // nikosauna.com -> (this proxy) -> script.google.com への中継でCORSを回避します。
 
-$GAS_URL = 'https://script.google.com/macros/s/AKfycbwQnpqVv-H4s4bG1-S3MvV8RGmm3HMsdYvshuE-r5qkX1P0oYNETevc-phmHCym-C8/exec';
+$GAS_URL = 'https://script.google.com/macros/s/AKfycbw2ugcZz13xtTmvNRRAWHRv55h5YU4mmMVS8GBevMn3F45hPixyEF16esdAhnDH5z6i/exec';
 
 // ===== Security / Hardening =====
 // - 同一サイト利用前提のため、Origin/Referer を簡易チェックします
